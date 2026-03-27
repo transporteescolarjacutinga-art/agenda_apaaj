@@ -89,13 +89,6 @@
             </div>
         </div>
 
-        <!-- Mobile Actions -->
-        <div class="flex lg:hidden gap-2">
-            <button id="btnNewAppointmentMobile" class="admin-only w-10 h-10 rounded-xl bg-gradient-to-br from-specBlue via-specPurple to-specRed text-white shadow-atmospheric flex items-center justify-center active:scale-95 transition-transform">
-                <i class="ph ph-plus text-xl"></i>
-            </button>
-        </div>
-
         <button id="btnNewAppointment" class="admin-only hidden lg:flex w-full py-4 rounded-xl bg-gradient-to-r from-specBlue via-specPurple to-specRed text-white font-medium shadow-atmospheric hover:shadow-atmospheric-hover transition-all items-center justify-center gap-2 transform hover:-translate-y-1">
             <i class="ph ph-plus-circle text-lg"></i> Novo Agendamento
         </button>
@@ -159,6 +152,11 @@
             </div>
         </div>
     </main>
+
+    <!-- Mobile FAB (Floating Action Button) -->
+    <button id="btnNewAppointmentMobile" class="admin-only lg:hidden fixed bottom-6 right-6 w-14 h-14 rounded-full bg-gradient-to-br from-specBlue via-specPurple to-specRed text-white shadow-atmospheric hover:scale-105 flex items-center justify-center active:scale-95 transition-transform z-[55]">
+        <i class="ph ph-plus text-2xl"></i>
+    </button>
 
     <!-- Offcanvas Drawer -->
     <div id="drawerOverlay" class="fixed inset-0 bg-textMain/10 backdrop-blur-[10px] sm:backdrop-blur-[20px] z-[60] opacity-0 pointer-events-none transition-opacity duration-300"></div>
