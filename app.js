@@ -124,6 +124,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('formTermino').value = item.termino || '';
                 document.getElementById('formEscola').value = item.escola || '';
                 document.getElementById('formTelefone').value = item.telefone || '';
+                const tr = item.transporte;
+                const trVal = (tr === 'Entrada' || tr === 'Saída') ? tr : 'Ambos';
+                if (document.getElementById('formTransporte')) document.getElementById('formTransporte').value = trVal;
                 document.getElementById('formObs').value = item.obs || '';
             }
         } else {
@@ -181,7 +184,7 @@ document.addEventListener('DOMContentLoaded', () => {
             termino: document.getElementById('formTermino').value,
             escola: document.getElementById('formEscola').value,
             telefone: document.getElementById('formTelefone').value,
-            transporte: true,
+            transporte: document.getElementById('formTransporte') ? document.getElementById('formTransporte').value : 'Ambos',
             obs: document.getElementById('formObs').value
         };
 
@@ -363,33 +366,60 @@ document.addEventListener('DOMContentLoaded', () => {
             const todayStatus = dateRef ? exc[dateRef] : null;
 
             const isCancelled = todayStatus === 'CANCELADO';
-            const isCompleted = todayStatus === 'CONCLUIDO';
+            const isCompletedEntrada = todayStatus && todayStatus.includes('ENTRADA');
+            const isCompletedSaida = todayStatus && todayStatus.includes('SAIDA');
             
             const cardOpacity = isCancelled ? 'opacity-40 grayscale' : '';
-            const checkColor = isCompleted ? 'bg-specGreen text-white border-specGreen shadow-sm' : 'bg-surface border-textMain/10 text-textMain/40 hover:border-specGreen hover:text-specGreen';
+            
+            const checkColorEntrada = isCompletedEntrada ? 'bg-specGreen text-white border-specGreen shadow-sm' : 'bg-surface border-textMain/10 text-textMain/40 hover:border-specGreen hover:text-specGreen';
+            const checkColorSaida = isCompletedSaida ? 'bg-specGreen text-white border-specGreen shadow-sm' : 'bg-surface border-textMain/10 text-textMain/40 hover:border-specGreen hover:text-specGreen';
             const cancelColor = isCancelled ? 'bg-specRed text-white border-specRed shadow-sm' : 'bg-surface border-textMain/10 text-textMain/40 hover:border-specRed hover:text-specRed';
 
             const pillClass = item.turno === 'Manhã' ? 'manha' : 'tarde';
             const phone = item.telefone ? String(item.telefone).replace(/\D/g, '') : '';
             const wppLink = phone ? `https://wa.me/55${phone}` : '#';
             
+            const trType = item.transporte;
+            const repEntrada = (trType === 'Entrada' || trType === 'Ambos' || trType === true || !trType);
+            const repSaida = (trType === 'Saída' || trType === 'Ambos' || trType === true || !trType);
+
             let actionButtons = '';
             if (dateRef) {
+                let btnsHtml = '';
+                if (repEntrada) {
+                    btnsHtml += `
+                    <button class="flex-1 py-1.5 sm:py-2 rounded-xl border-2 font-display font-bold text-[0.65rem] sm:text-xs flex items-center justify-center gap-1 sm:gap-2 transition-all ${checkColorEntrada}" onclick="toggleDailyStatus('${item.id}', '${dateRef}', 'ENTRADA')">
+                        <i class="ph ${isCompletedEntrada ? 'ph-check-circle' : 'ph-sign-in'} text-base"></i> Entrada
+                    </button>`;
+                }
+                if (repSaida) {
+                    btnsHtml += `
+                    <button class="flex-1 py-1.5 sm:py-2 rounded-xl border-2 font-display font-bold text-[0.65rem] sm:text-xs flex items-center justify-center gap-1 sm:gap-2 transition-all ${checkColorSaida}" onclick="toggleDailyStatus('${item.id}', '${dateRef}', 'SAIDA')">
+                        <i class="ph ${isCompletedSaida ? 'ph-check-circle' : 'ph-sign-out'} text-base"></i> Saída
+                    </button>`;
+                }
+                btnsHtml += `
+                <button class="flex-1 py-1.5 sm:py-2 rounded-xl border-2 font-display font-bold text-[0.65rem] sm:text-xs flex items-center justify-center gap-1 sm:gap-2 transition-all ${cancelColor}" onclick="toggleDailyStatus('${item.id}', '${dateRef}', 'CANCELADO')">
+                    <i class="ph ${isCancelled ? 'ph-x-circle' : 'ph-x'} text-base"></i> Não irá
+                </button>`;
+
                 actionButtons = `
                 <div class="mt-3 pt-3 border-t border-textMain/5 flex gap-2 pointer-events-auto relative z-20">
-                    <button class="flex-1 py-1.5 sm:py-2 rounded-xl border-2 font-display font-bold text-[0.65rem] sm:text-xs flex items-center justify-center gap-1 sm:gap-2 transition-all ${checkColor}" onclick="toggleDailyStatus('${item.id}', '${dateRef}', 'CONCLUIDO')">
-                        <i class="ph ${isCompleted ? 'ph-check-circle' : 'ph-check'} text-base"></i> Transporte
-                    </button>
-                    <button class="flex-1 py-1.5 sm:py-2 rounded-xl border-2 font-display font-bold text-[0.65rem] sm:text-xs flex items-center justify-center gap-1 sm:gap-2 transition-all ${cancelColor}" onclick="toggleDailyStatus('${item.id}', '${dateRef}', 'CANCELADO')">
-                        <i class="ph ${isCancelled ? 'ph-x-circle' : 'ph-x'} text-base"></i> Não irá hoje
-                    </button>
+                    ${btnsHtml}
                 </div>`;
             }
             
+            let fullyDone = false;
+            if (isCancelled) fullyDone = true;
+            else if (repEntrada && repSaida) fullyDone = isCompletedEntrada && isCompletedSaida;
+            else if (repEntrada) fullyDone = isCompletedEntrada;
+            else if (repSaida) fullyDone = isCompletedSaida;
+
             const card = document.createElement('div');
             card.className = 'agenda-card transition-all duration-300 ' + cardOpacity;
             card.dataset.id = item.id;
             card.dataset.inicio = item.inicio || '';
+            card.dataset.fullydone = fullyDone ? 'true' : 'false';
             card.innerHTML = `
                 <div class="turno-pill ${pillClass}"></div>
                 <div class="card-header">
@@ -434,7 +464,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 <div class="flex justify-between items-center mt-2 px-1">
                     <div class="flex gap-2">
-                        <span class="badge"><i class="ph ph-bus text-specGreen"></i> Transporte Escolar</span>
+                        <span class="badge"><i class="ph ph-bus text-specGreen"></i> ${trType === 'Entrada' ? 'Somente Entrada' : (trType === 'Saída' ? 'Somente Saída' : 'Ida e Volta')}</span>
                         ${item.obs ? `<span class="badge bg-specYellow/10 text-specYellow"><i class="ph ph-info"></i> ${item.obs}</span>` : ''}
                     </div>
                     ${!isCancelled ? `<a href="${wppLink}" target="_blank" class="whatsapp-link relative z-20 pointer-events-auto"><i class="ph ph-whatsapp-logo text-xl"></i> Contatar</a>` : ''}
@@ -451,7 +481,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ---- Date Specific Actions ----
-    window.toggleDailyStatus = async (id, dateStr, status) => {
+    window.toggleDailyStatus = async (id, dateStr, clickedStatus) => {
         const itemIdx = appointments.findIndex(a => String(a.id) === String(id));
         if (itemIdx === -1) return;
         
@@ -459,10 +489,21 @@ document.addEventListener('DOMContentLoaded', () => {
         let exc = {};
         try { exc = JSON.parse(item.excecoes || '{}'); } catch(e){}
         
-        if (exc[dateStr] === status) {
-            delete exc[dateStr];
+        let currentStatus = exc[dateStr] || '';
+        
+        if (clickedStatus === 'CANCELADO') {
+            if (currentStatus === 'CANCELADO') delete exc[dateStr];
+            else exc[dateStr] = 'CANCELADO';
         } else {
-            exc[dateStr] = status;
+            if (currentStatus === 'CANCELADO') currentStatus = '';
+            let parts = currentStatus ? currentStatus.split(',') : [];
+            if (parts.includes(clickedStatus)) {
+                parts = parts.filter(p => p !== clickedStatus);
+            } else {
+                parts.push(clickedStatus);
+            }
+            if (parts.length === 0) delete exc[dateStr];
+            else exc[dateStr] = parts.join(',');
         }
         
         item.excecoes = JSON.stringify(exc);
@@ -696,9 +737,11 @@ document.addEventListener('DOMContentLoaded', () => {
         
         cards.forEach(card => {
             const cardInicio = card.dataset.inicio;
+            const isFullyDone = card.dataset.fullydone === 'true';
+            
             if (!cardInicio || cardInicio.indexOf(':') === -1) return;
             
-            if (cardInicio < currentTimeStr) {
+            if (isFullyDone) {
                 if (!card.classList.contains('opacity-40')) {
                     card.classList.add('opacity-50');
                 }
