@@ -29,11 +29,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if(DOM.fData) DOM.fData.value = localISOTime;
 
     // ---- Data Management (Google Sheets API) ----
-    const API_URL = "https://script.google.com/macros/s/AKfycbwRQUFUDN_8NfwVtUNyib1qGybSrRbonnIRhUPN2HQ16EV6pxumbLXdoqGAXD07jetOOA/exec";
+    const API_URL = "https://script.google.com/macros/s/AKfycbw6Dza5i3iQajXG2xA87zd_tn84H5j0z7YMwuCGnG1rNsWbkJiK6DKl1I2Hx-vI4aepNg/exec";
     let appointments = [];
 
-    async function loadData() {
-        DOM.agendaList.innerHTML = '<div class="py-12 flex flex-col items-center justify-center text-textMain/50 font-medium gap-4"><i class="ph ph-spinner-gap animate-spin text-4xl text-primaryStart"></i><div>Sincronizando com o Google Sheets...</div></div>';
+    async function loadData(silent = false) {
+        if (!silent) {
+            DOM.agendaList.innerHTML = '<div class="py-12 flex flex-col items-center justify-center text-textMain/50 font-medium gap-4"><i class="ph ph-spinner-gap animate-spin text-4xl text-primaryStart"></i><div>Sincronizando com o Google Sheets...</div></div>';
+        }
         
         try {
             const response = await fetch(API_URL + "?nocache=" + Date.now(), { cache: 'no-store' });
@@ -49,23 +51,54 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             if(!data.error) {
-                appointments = data.map(item => ({
-                    ...item,
-                    inicio: formatTime(item.inicio),
-                    termino: formatTime(item.termino)
-                }));
+                const newData = data.map(item => {
+                    let dInicio = item.dataInicio || item.datainicio || item['Data Início'] || item['Data Inicio'] || '';
+                    if (dInicio && typeof dInicio === 'string') {
+                        if (dInicio.includes('T')) {
+                            dInicio = dInicio.split('T')[0];
+                        } else if (dInicio.includes('/')) {
+                            const datePart = dInicio.split(' ')[0];
+                            const parts = datePart.split('/');
+                            if (parts.length === 3) {
+                                dInicio = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                            }
+                        } else if (dInicio.includes(' ')) {
+                            dInicio = dInicio.split(' ')[0];
+                        }
+                    }
+                    return {
+                        ...item,
+                        dataInicio: dInicio,
+                        inicio: formatTime(item.inicio),
+                        termino: formatTime(item.termino)
+                    };
+                });
+                
+                if (silent) {
+                    if (JSON.stringify(appointments) !== JSON.stringify(newData)) {
+                        appointments = newData;
+                        updateFilterOptions();
+                        if (!gravityActive) render();
+                    }
+                } else {
+                    appointments = newData;
+                    updateFilterOptions();
+                    render();
+                }
             } else {
-                console.error("API Error:", data.error);
-                appointments = [];
+                if (!silent) {
+                    console.error("API Error:", data.error);
+                    appointments = [];
+                    updateFilterOptions();
+                    render();
+                }
             }
         } catch(e) {
-            console.error("Network Error:", e);
-            DOM.agendaList.innerHTML = '<div class="py-12 text-center text-red-500 font-medium">Falha na conexão com a Nuvem. Tente recarregar.</div>';
-            return;
+            if (!silent) {
+                console.error("Network Error:", e);
+                DOM.agendaList.innerHTML = '<div class="py-12 text-center text-red-500 font-medium">Falha na conexão com a Nuvem. Tente recarregar.</div>';
+            }
         }
-
-        updateFilterOptions();
-        render();
     }
 
     // ---- Drawer Logic ----
@@ -702,6 +735,9 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(updateClockAndScroll, 1000);
 
     // Init
-    loadData();
+    loadData(false);
     setTimeout(updateClockAndScroll, 500);
+    
+    // Auto-sync em tempo real (Background polling a cada 15 segundos)
+    setInterval(() => loadData(true), 15000);
 });
