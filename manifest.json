@@ -1,0 +1,23 @@
+{
+  "name": "Agenda ONG - NOVO OLHAR 2026",
+  "short_name": "Agenda ONG",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f8f9fa",
+  "theme_color": "#f8f9fa",
+  "description": "Sistema de Agendamentos - Novo Olhar 2026",
+  "icons": [
+    {
+      "src": "logo-ong.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "logo-ong.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
