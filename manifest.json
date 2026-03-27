@@ -1,11 +1,11 @@
 {
-  "name": "Agenda ONG - NOVO OLHAR 2026",
-  "short_name": "Agenda ONG",
+  "name": "Transporte - Novo Olhar - Agenda 2026",
+  "short_name": "Transporte",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#f8f9fa",
   "theme_color": "#f8f9fa",
-  "description": "Sistema de Agendamentos - Novo Olhar 2026",
+  "description": "Transporte - Novo Olhar - Agenda 2026",
   "icons": [
     {
       "src": "logo-ong.png",
