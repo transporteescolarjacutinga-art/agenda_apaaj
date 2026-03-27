@@ -474,10 +474,10 @@ document.addEventListener('DOMContentLoaded', () => {
             DOM.agendaList.appendChild(card);
         });
         
-        // Reset scroll memory so the next clock tick forces an auto-scroll
-        if (typeof lastScrolledTimeStr !== 'undefined') {
-            lastScrolledTimeStr = '';
-        }
+        // A rolagem automática a cada atualização foi removida para não incomodar o usuário
+        // if (typeof lastScrolledTimeStr !== 'undefined') {
+        //     lastScrolledTimeStr = '';
+        // }
     }
 
     // ---- Date Specific Actions ----
@@ -728,6 +728,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
+    let initialScrollDone = false;
     function highlightAndScrollCards(currentTimeStr) {
         const cards = document.querySelectorAll('.agenda-card');
         if (cards.length === 0) return;
@@ -765,13 +766,16 @@ document.addEventListener('DOMContentLoaded', () => {
             
             targetCard.classList.add('ring-2', 'ring-specBlue', 'shadow-atmospheric-hover', 'scale-[1.02]', 'border-transparent');
             
-            const container = DOM.agendaList.parentElement;
-            const cardTop = targetCard.offsetTop;
-            
-            container.scrollTo({
-                top: cardTop - 20, 
-                behavior: 'smooth'
-            });
+            if (!initialScrollDone) {
+                const container = DOM.agendaList.parentElement;
+                const cardTop = targetCard.offsetTop;
+                
+                container.scrollTo({
+                    top: cardTop - 20, 
+                    behavior: 'smooth'
+                });
+                initialScrollDone = true;
+            }
         }
     }
 
