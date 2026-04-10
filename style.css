@@ -191,3 +191,24 @@ body.viewer-mode .admin-only {
         border-radius: 8px;
     }
 }
+
+/* Confirmation Modal Animation States */
+#confirmModalOverlay.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+#confirmModalOverlay.active #confirmModal {
+    opacity: 1;
+    transform: scale(1);
+}
+
+/* Transitions for smoother feeling */
+#confirmModalOverlay {
+    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#confirmModal {
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
+}
+

@@ -262,6 +262,29 @@
         </div>
     </div>
 
+    <!-- Confirmation Modal -->
+    <div id="confirmModalOverlay" class="fixed inset-0 bg-textMain/20 backdrop-blur-md z-[100] opacity-0 pointer-events-none transition-all duration-300 flex items-center justify-center p-4">
+        <div id="confirmModal" class="bg-white w-full max-w-sm rounded-[2rem] shadow-atmospheric p-6 sm:p-8 transform scale-90 opacity-0 transition-all duration-300">
+            <div class="flex flex-col items-center text-center gap-4">
+                <div id="confirmModalIcon" class="w-16 h-16 rounded-2xl bg-specBlue/10 flex items-center justify-center text-specBlue mb-2">
+                    <i class="ph ph-question text-3xl"></i>
+                </div>
+                <h3 id="confirmModalTitle" class="font-display font-bold text-xl text-textMain">Confirmar Ação</h3>
+                <p id="confirmModalMessage" class="text-sm text-textMain/60 leading-relaxed">Deseja realmente realizar esta alteração?</p>
+                
+                <div class="flex gap-3 w-full mt-4">
+                    <button id="btnConfirmCancel" class="flex-1 py-3.5 rounded-xl bg-surface text-textMain font-bold text-sm hover:bg-background transition-colors">
+                        Cancelar
+                    </button>
+                    <button id="btnConfirmOk" class="flex-1 py-3.5 rounded-xl bg-textMain text-white font-bold text-sm hover:bg-black shadow-lg transition-all transform hover:-translate-y-1">
+                        Confirmar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="app.js?v=2"></script>
+
 </body>
 </html>

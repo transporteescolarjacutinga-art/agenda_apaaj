@@ -20,7 +20,10 @@ document.addEventListener('DOMContentLoaded', () => {
         
         navGravity: document.getElementById('navGravity'),
         navGravityMobile: document.getElementById('navGravityMobile'),
-        mainContainer: document.getElementById('mainContainer')
+        mainContainer: document.getElementById('mainContainer'),
+        confirmModalOverlay: document.getElementById('confirmModalOverlay'),
+        btnConfirmOk: document.getElementById('btnConfirmOk'),
+        btnConfirmCancel: document.getElementById('btnConfirmCancel')
     };
 
     // ---- Init Filters ----
@@ -140,6 +143,38 @@ document.addEventListener('DOMContentLoaded', () => {
         DOM.drawer.classList.add('translate-x-full');
         DOM.drawer.classList.remove('translate-x-0');
     }
+
+    // ---- Confirmation Modal Logic ----
+    let currentConfirmationAction = null;
+
+    function showConfirmationModal({ title, message, iconClass, colorClass, onConfirm }) {
+        const titleEl = document.getElementById('confirmModalTitle');
+        const messageEl = document.getElementById('confirmModalMessage');
+        const iconContainer = document.getElementById('confirmModalIcon');
+        
+        titleEl.textContent = title;
+        messageEl.textContent = message;
+        iconContainer.className = `w-16 h-16 rounded-2xl flex items-center justify-center mb-2 ${colorClass}`;
+        iconContainer.innerHTML = `<i class="ph ${iconClass} text-3xl"></i>`;
+        
+        currentConfirmationAction = onConfirm;
+        DOM.confirmModalOverlay.classList.add('active');
+    }
+
+    function closeConfirmationModal() {
+        DOM.confirmModalOverlay.classList.remove('active');
+        currentConfirmationAction = null;
+    }
+
+    DOM.btnConfirmOk.addEventListener('click', () => {
+        if (currentConfirmationAction) currentConfirmationAction();
+        closeConfirmationModal();
+    });
+
+    DOM.btnConfirmCancel.addEventListener('click', closeConfirmationModal);
+    DOM.confirmModalOverlay.addEventListener('click', (e) => {
+        if (e.target.id === 'confirmModalOverlay') closeConfirmationModal();
+    });
 
     // ---- Events ----
     DOM.btnNew.addEventListener('click', () => openDrawer('create'));
@@ -386,20 +421,21 @@ document.addEventListener('DOMContentLoaded', () => {
             let actionButtons = '';
             if (dateRef) {
                 let btnsHtml = '';
+                const pName = (item.paciente || 'paciente').replace(/'/g, "\\'");
                 if (repEntrada) {
                     btnsHtml += `
-                    <button class="flex-1 py-1.5 sm:py-2 rounded-xl border-2 font-display font-bold text-[0.65rem] sm:text-xs flex items-center justify-center gap-1 sm:gap-2 transition-all ${checkColorEntrada}" onclick="toggleDailyStatus('${item.id}', '${dateRef}', 'ENTRADA')">
+                    <button class="flex-1 py-1.5 sm:py-2 rounded-xl border-2 font-display font-bold text-[0.65rem] sm:text-xs flex items-center justify-center gap-1 sm:gap-2 transition-all ${checkColorEntrada}" onclick="confirmStatusChange('${item.id}', '${dateRef}', 'ENTRADA', '${pName}')">
                         <i class="ph ${isCompletedEntrada ? 'ph-check-circle' : 'ph-sign-in'} text-base"></i> Entrada
                     </button>`;
                 }
                 if (repSaida) {
                     btnsHtml += `
-                    <button class="flex-1 py-1.5 sm:py-2 rounded-xl border-2 font-display font-bold text-[0.65rem] sm:text-xs flex items-center justify-center gap-1 sm:gap-2 transition-all ${checkColorSaida}" onclick="toggleDailyStatus('${item.id}', '${dateRef}', 'SAIDA')">
+                    <button class="flex-1 py-1.5 sm:py-2 rounded-xl border-2 font-display font-bold text-[0.65rem] sm:text-xs flex items-center justify-center gap-1 sm:gap-2 transition-all ${checkColorSaida}" onclick="confirmStatusChange('${item.id}', '${dateRef}', 'SAIDA', '${pName}')">
                         <i class="ph ${isCompletedSaida ? 'ph-check-circle' : 'ph-sign-out'} text-base"></i> Saída
                     </button>`;
                 }
                 btnsHtml += `
-                <button class="flex-1 py-1.5 sm:py-2 rounded-xl border-2 font-display font-bold text-[0.65rem] sm:text-xs flex items-center justify-center gap-1 sm:gap-2 transition-all ${cancelColor}" onclick="toggleDailyStatus('${item.id}', '${dateRef}', 'CANCELADO')">
+                <button class="flex-1 py-1.5 sm:py-2 rounded-xl border-2 font-display font-bold text-[0.65rem] sm:text-xs flex items-center justify-center gap-1 sm:gap-2 transition-all ${cancelColor}" onclick="confirmStatusChange('${item.id}', '${dateRef}', 'CANCELADO', '${pName}')">
                     <i class="ph ${isCancelled ? 'ph-x-circle' : 'ph-x'} text-base"></i> Não irá
                 </button>`;
 
@@ -481,6 +517,34 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ---- Date Specific Actions ----
+    window.confirmStatusChange = (id, dateStr, clickedStatus, patientName) => {
+        let actionLabel = '';
+        let icon = '';
+        let color = '';
+        
+        if (clickedStatus === 'ENTRADA') {
+            actionLabel = 'Confirmar entrada';
+            icon = 'ph-sign-in';
+            color = 'bg-specGreen/10 text-specGreen';
+        } else if (clickedStatus === 'SAIDA') {
+            actionLabel = 'Confirmar saída';
+            icon = 'ph-sign-out';
+            color = 'bg-specGreen/10 text-specGreen';
+        } else if (clickedStatus === 'CANCELADO') {
+            actionLabel = 'Confirmar falta (Não Irá)';
+            icon = 'ph-x-circle';
+            color = 'bg-specRed/10 text-specRed';
+        }
+
+        showConfirmationModal({
+            title: actionLabel,
+            message: `Deseja registrar esta ação para ${patientName}?`,
+            iconClass: icon,
+            colorClass: color,
+            onConfirm: () => window.toggleDailyStatus(id, dateStr, clickedStatus)
+        });
+    };
+
     window.toggleDailyStatus = async (id, dateStr, clickedStatus) => {
         const itemIdx = appointments.findIndex(a => String(a.id) === String(id));
         if (itemIdx === -1) return;
