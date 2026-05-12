@@ -532,11 +532,6 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             DOM.agendaList.appendChild(card);
         });
-        
-        // A rolagem automática a cada atualização foi removida para não incomodar o usuário
-        // if (typeof lastScrolledTimeStr !== 'undefined') {
-        //     lastScrolledTimeStr = '';
-        // }
     }
 
     // ---- Date Specific Actions ----
@@ -650,8 +645,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         item.excecoes = JSON.stringify(exc);
-        // No need to full re-render here if we don't want to lose focus, but for consistency:
-        // render(); 
         
         try {
             await fetch(API_URL, {
@@ -701,19 +694,57 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    window.removeMonitor = (index) => {
-        MONITORAS.splice(index, 1);
+    async function syncMonitorsToCloud() {
         localStorage.setItem('lumina_monitoras', JSON.stringify(MONITORAS));
+    }
+
+    window.removeMonitor = async (index) => {
+        const monitorName = MONITORAS[index];
+        
+        try {
+            const response = await fetch(API_URL + "?sheet=monitors");
+            const cloudData = await response.json();
+            const monitorEntry = cloudData.find(m => m.monitora === monitorName);
+            
+            if (monitorEntry) {
+                await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ 
+                        action: 'DELETE', 
+                        sheet: 'monitors',
+                        id: monitorEntry.id 
+                    })
+                });
+            }
+        } catch(e) { console.error(e); }
+
+        MONITORAS.splice(index, 1);
         renderMonitorsList();
+        syncMonitorsToCloud();
     };
 
-    btnAddMonitor.addEventListener('click', () => {
+    btnAddMonitor.addEventListener('click', async () => {
         const name = newMonitorNameInput.value.trim();
         if (name && !MONITORAS.includes(name)) {
+            const newId = Date.now().toString();
+            
+            try {
+                await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ 
+                        action: 'CREATE', 
+                        sheet: 'monitors',
+                        data: { id: newId, monitora: name } 
+                    })
+                });
+            } catch(e) { console.error(e); }
+
             MONITORAS.push(name);
-            localStorage.setItem('lumina_monitoras', JSON.stringify(MONITORAS));
             newMonitorNameInput.value = '';
             renderMonitorsList();
+            syncMonitorsToCloud();
         }
     });
 
@@ -990,8 +1021,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Init
     loadData(false);
+    loadMonitors();
     setTimeout(updateClockAndScroll, 500);
     
     // Auto-sync em tempo real (Background polling a cada 15 segundos)
-    setInterval(() => loadData(true), 15000);
+    setInterval(() => {
+        loadData(true);
+        loadMonitors();
+    }, 15000);
 });
