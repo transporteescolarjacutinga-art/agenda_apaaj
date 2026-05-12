@@ -105,6 +105,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function loadMonitors() {
+        try {
+            const response = await fetch(API_URL + "?sheet=monitors&nocache=" + Date.now());
+            const data = await response.json();
+            if (Array.isArray(data)) {
+                // Mapeia para pegar apenas os nomes das monitoras (aceita Monitora ou monitora)
+                const names = data.map(m => m.monitora || m.Monitora || m.MONITORA).filter(Boolean);
+                if (names.length > 0) {
+                    MONITORAS = names;
+                    render(); 
+                }
+            }
+        } catch(e) {
+            console.error("Error loading monitors:", e);
+        }
+    }
+
     // ---- Drawer Logic ----
     function openDrawer(mode = 'create', id = null) {
         
@@ -704,16 +721,17 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch(API_URL + "?sheet=monitors");
             const cloudData = await response.json();
-            const monitorEntry = cloudData.find(m => m.monitora === monitorName);
+            const monitorEntry = cloudData.find(m => (m.monitora || m.Monitora || m.MONITORA) === monitorName);
             
             if (monitorEntry) {
+                const targetId = monitorEntry.id || monitorEntry.ID;
                 await fetch(API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                     body: JSON.stringify({ 
                         action: 'DELETE', 
                         sheet: 'monitors',
-                        id: monitorEntry.id 
+                        id: targetId 
                     })
                 });
             }
