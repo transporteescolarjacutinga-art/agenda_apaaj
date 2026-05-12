@@ -212,3 +212,22 @@ body.viewer-mode .admin-only {
     transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
 }
 
+/* Monitors Modal */
+#monitorsModalOverlay.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+#monitorsModalOverlay.active #monitorsModal {
+    opacity: 1;
+    transform: scale(1);
+}
+
+#monitorsModalOverlay {
+    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#monitorsModal {
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
+}
+

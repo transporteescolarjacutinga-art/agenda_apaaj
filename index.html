@@ -66,17 +66,22 @@
                         <button id="btnAdminLogout" class="text-specBlue hidden hover:text-specRed transition-colors" title="Sair do Admin">
                             <i class="ph ph-lock-key-open text-lg"></i>
                         </button>
+                        <button id="btnManageMonitorsMobile" class="admin-only text-specPurple hover:text-specPurple/70 transition-colors ml-2" title="Gerenciar Monitoras">
+                            <i class="ph ph-users-three text-lg"></i>
+                        </button>
                     </div>
                 </div>
                 <p class="text-[0.65rem] lg:text-[0.65rem] font-bold text-textMain/50 uppercase tracking-[0.2em] mt-0.5 lg:mt-2 w-full text-left lg:text-center">AGENDA 2026</p>
             </div>
         </div>
 
-        <!-- Desktop Nav -->
         <nav class="hidden lg:flex flex-1 flex-col space-y-2">
             <a href="#" class="flex items-center gap-3 px-4 py-3 bg-white rounded-xl shadow-atmospheric font-medium text-sm text-textMain transition-transform hover:-translate-y-0.5" id="navAgenda">
                 <i class="ph ph-squares-four text-xl text-specBlue"></i> Visão Geral
             </a>
+            <button class="admin-only flex items-center gap-3 px-4 py-3 bg-white rounded-xl shadow-atmospheric font-medium text-sm text-textMain transition-transform hover:-translate-y-0.5 w-full text-left" id="btnManageMonitors">
+                <i class="ph ph-users-three text-xl text-specPurple"></i> Gerenciar Monitoras
+            </button>
         </nav>
 
         <!-- Prefecture footer (Desktop) -->
@@ -262,7 +267,35 @@
         </div>
     </div>
 
-    <!-- Confirmation Modal -->
+    <!-- Monitors Management Modal -->
+    <div id="monitorsModalOverlay" class="fixed inset-0 bg-textMain/20 backdrop-blur-md z-[100] opacity-0 pointer-events-none transition-all duration-300 flex items-center justify-center p-4">
+        <div id="monitorsModal" class="bg-white w-full max-w-md rounded-[2rem] shadow-atmospheric p-6 sm:p-8 transform scale-90 opacity-0 transition-all duration-300">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="font-display font-bold text-xl text-textMain">Gerenciar Monitoras</h3>
+                <button id="btnCloseMonitors" class="w-8 h-8 rounded-full bg-surface flex items-center justify-center hover:bg-background transition-all">
+                    <i class="ph ph-x text-lg"></i>
+                </button>
+            </div>
+            
+            <div class="flex gap-2 mb-6">
+                <input type="text" id="newMonitorName" placeholder="Nome da monitora..." class="flex-1 bg-surface px-4 py-2.5 rounded-xl text-sm font-medium outline-none border border-transparent focus:border-specPurple/30 transition-all">
+                <button id="btnAddMonitor" class="px-4 py-2.5 bg-specPurple text-white rounded-xl font-bold text-sm hover:bg-specPurple/90 transition-all flex items-center gap-2">
+                    <i class="ph ph-plus-circle"></i> Add
+                </button>
+            </div>
+
+            <div class="max-h-[300px] overflow-y-auto custom-scrollbar pr-2" id="monitorsList">
+                <!-- Monitor list items will be injected here -->
+            </div>
+
+            <div class="mt-8 pt-4 border-t border-textMain/5 flex justify-end">
+                <button id="btnSaveMonitors" class="px-8 py-3 rounded-xl bg-textMain text-white font-bold text-sm hover:bg-black transition-all">
+                    Concluído
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div id="confirmModalOverlay" class="fixed inset-0 bg-textMain/20 backdrop-blur-md z-[100] opacity-0 pointer-events-none transition-all duration-300 flex items-center justify-center p-4">
         <div id="confirmModal" class="bg-white w-full max-w-sm rounded-[2rem] shadow-atmospheric p-6 sm:p-8 transform scale-90 opacity-0 transition-all duration-300">
             <div class="flex flex-col items-center text-center gap-4">

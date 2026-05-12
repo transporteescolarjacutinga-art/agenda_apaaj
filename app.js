@@ -34,6 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ---- Data Management (Google Sheets API) ----
     const API_URL = "https://script.google.com/macros/s/AKfycbw6Dza5i3iQajXG2xA87zd_tn84H5j0z7YMwuCGnG1rNsWbkJiK6DKl1I2Hx-vI4aepNg/exec";
     let appointments = [];
+    let MONITORAS = JSON.parse(localStorage.getItem('lumina_monitoras')) || ["Vanessa", "Luciana", "Eliane", "Nenhuma"];
 
     async function loadData(silent = false) {
         if (!silent) {
@@ -398,7 +399,18 @@ document.addEventListener('DOMContentLoaded', () => {
         filtered.forEach(item => {
             let exc = {};
             try { exc = JSON.parse(item.excecoes || '{}'); } catch(e){}
-            const todayStatus = dateRef ? exc[dateRef] : null;
+            const rawValue = dateRef ? exc[dateRef] : null;
+            let todayStatus = '';
+            let todayMonitor = '';
+
+            if (rawValue) {
+                if (typeof rawValue === 'object') {
+                    todayStatus = rawValue.status || '';
+                    todayMonitor = rawValue.monitora || '';
+                } else {
+                    todayStatus = rawValue;
+                }
+            }
 
             const isCancelled = todayStatus === 'CANCELADO';
             const isCompletedEntrada = todayStatus && todayStatus.includes('ENTRADA');
@@ -439,9 +451,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     <i class="ph ${isCancelled ? 'ph-x-circle' : 'ph-x'} text-base"></i> Não irá
                 </button>`;
 
+                const monitorOptions = MONITORAS.map(m => `<option value="${m}" ${todayMonitor === m ? 'selected' : ''}>${m}</option>`).join('');
+
                 actionButtons = `
-                <div class="mt-3 pt-3 border-t border-textMain/5 flex gap-2 pointer-events-auto relative z-20">
-                    ${btnsHtml}
+                <div class="mt-3 pt-3 border-t border-textMain/5 flex flex-col gap-3 pointer-events-auto relative z-20">
+                    <div class="flex items-center gap-2">
+                        <label class="text-[0.6rem] font-bold text-textMain/40 uppercase tracking-widest whitespace-nowrap">Monitora:</label>
+                        <select class="flex-1 bg-surface border border-textMain/10 rounded-lg px-2 py-1 text-xs font-medium outline-none" onchange="window.updateDailyMonitor('${item.id}', '${dateRef}', this.value)">
+                            <option value="">Selecionar...</option>
+                            ${monitorOptions}
+                        </select>
+                    </div>
+                    <div class="flex gap-2">
+                        ${btnsHtml}
+                    </div>
                 </div>`;
             }
             
@@ -553,11 +576,23 @@ document.addEventListener('DOMContentLoaded', () => {
         let exc = {};
         try { exc = JSON.parse(item.excecoes || '{}'); } catch(e){}
         
-        let currentStatus = exc[dateStr] || '';
+        const rawValue = exc[dateStr];
+        let currentStatus = '';
+        let currentMonitor = '';
+
+        if (rawValue) {
+            if (typeof rawValue === 'object') {
+                currentStatus = rawValue.status || '';
+                currentMonitor = rawValue.monitora || '';
+            } else {
+                currentStatus = rawValue;
+            }
+        }
         
+        let newStatus = currentStatus;
         if (clickedStatus === 'CANCELADO') {
-            if (currentStatus === 'CANCELADO') delete exc[dateStr];
-            else exc[dateStr] = 'CANCELADO';
+            if (currentStatus === 'CANCELADO') newStatus = '';
+            else newStatus = 'CANCELADO';
         } else {
             if (currentStatus === 'CANCELADO') currentStatus = '';
             let parts = currentStatus ? currentStatus.split(',') : [];
@@ -566,8 +601,13 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 parts.push(clickedStatus);
             }
-            if (parts.length === 0) delete exc[dateStr];
-            else exc[dateStr] = parts.join(',');
+            newStatus = parts.join(',');
+        }
+
+        if (newStatus || currentMonitor) {
+            exc[dateStr] = { status: newStatus, monitora: currentMonitor };
+        } else {
+            delete exc[dateStr];
         }
         
         item.excecoes = JSON.stringify(exc);
@@ -583,6 +623,109 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error(e);
         }
     };
+
+    window.updateDailyMonitor = async (id, dateStr, monitorName) => {
+        const itemIdx = appointments.findIndex(a => String(a.id) === String(id));
+        if (itemIdx === -1) return;
+        
+        const item = appointments[itemIdx];
+        let exc = {};
+        try { exc = JSON.parse(item.excecoes || '{}'); } catch(e){}
+        
+        const rawValue = exc[dateStr];
+        let currentStatus = '';
+
+        if (rawValue) {
+            if (typeof rawValue === 'object') {
+                currentStatus = rawValue.status || '';
+            } else {
+                currentStatus = rawValue;
+            }
+        }
+
+        if (monitorName || currentStatus) {
+            exc[dateStr] = { status: currentStatus, monitora: monitorName };
+        } else {
+            delete exc[dateStr];
+        }
+        
+        item.excecoes = JSON.stringify(exc);
+        // No need to full re-render here if we don't want to lose focus, but for consistency:
+        // render(); 
+        
+        try {
+            await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({ action: 'UPDATE', data: item })
+            });
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    // ---- Monitors Management Logic ----
+    const btnManageMonitors = document.getElementById('btnManageMonitors');
+    const monitorsModalOverlay = document.getElementById('monitorsModalOverlay');
+    const monitorsModal = document.getElementById('monitorsModal');
+    const btnCloseMonitors = document.getElementById('btnCloseMonitors');
+    const btnSaveMonitors = document.getElementById('btnSaveMonitors');
+    const btnAddMonitor = document.getElementById('btnAddMonitor');
+    const newMonitorNameInput = document.getElementById('newMonitorName');
+    const monitorsListContainer = document.getElementById('monitorsList');
+
+    function openMonitorsModal() {
+        renderMonitorsList();
+        monitorsModalOverlay.classList.add('active');
+        monitorsModal.classList.add('active');
+    }
+
+    function closeMonitorsModal() {
+        monitorsModalOverlay.classList.remove('active');
+        monitorsModal.classList.remove('active');
+        render(); // Re-render agenda to show updated list
+    }
+
+    function renderMonitorsList() {
+        monitorsListContainer.innerHTML = '';
+        MONITORAS.forEach((m, index) => {
+            const item = document.createElement('div');
+            item.className = 'flex items-center justify-between p-3 bg-surface rounded-xl mb-2 group transition-all hover:bg-white hover:shadow-sm';
+            item.innerHTML = `
+                <span class="font-medium text-sm text-textMain">${m}</span>
+                <button class="text-textMain/20 hover:text-specRed transition-colors opacity-0 group-hover:opacity-100" onclick="window.removeMonitor(${index})">
+                    <i class="ph ph-trash text-lg"></i>
+                </button>
+            `;
+            monitorsListContainer.appendChild(item);
+        });
+    }
+
+    window.removeMonitor = (index) => {
+        MONITORAS.splice(index, 1);
+        localStorage.setItem('lumina_monitoras', JSON.stringify(MONITORAS));
+        renderMonitorsList();
+    };
+
+    btnAddMonitor.addEventListener('click', () => {
+        const name = newMonitorNameInput.value.trim();
+        if (name && !MONITORAS.includes(name)) {
+            MONITORAS.push(name);
+            localStorage.setItem('lumina_monitoras', JSON.stringify(MONITORAS));
+            newMonitorNameInput.value = '';
+            renderMonitorsList();
+        }
+    });
+
+    if (btnManageMonitors) btnManageMonitors.addEventListener('click', openMonitorsModal);
+    const btnManageMonitorsMobile = document.getElementById('btnManageMonitorsMobile');
+    if (btnManageMonitorsMobile) btnManageMonitorsMobile.addEventListener('click', openMonitorsModal);
+    
+    if (btnCloseMonitors) btnCloseMonitors.addEventListener('click', closeMonitorsModal);
+    if (btnSaveMonitors) btnSaveMonitors.addEventListener('click', closeMonitorsModal);
+    monitorsModalOverlay.addEventListener('click', (e) => {
+        if (e.target.id === 'monitorsModalOverlay') closeMonitorsModal();
+    });
 
     // ---- Matter.js Anti-Gravity (V2 Refined) ----
     let gravityActive = false;
