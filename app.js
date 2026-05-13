@@ -663,6 +663,9 @@ document.addEventListener('DOMContentLoaded', () => {
         
         item.excecoes = JSON.stringify(exc);
         
+        // Feedback visual imediato (Opcional: renderizar se necessário)
+        // render(); 
+
         try {
             await fetch(API_URL, {
                 method: 'POST',
@@ -1042,9 +1045,17 @@ document.addEventListener('DOMContentLoaded', () => {
     loadMonitors();
     setTimeout(updateClockAndScroll, 500);
     
-    // Auto-sync em tempo real (Background polling a cada 15 segundos)
+    // Auto-sync em tempo real (Background polling a cada 5 segundos)
     setInterval(() => {
         loadData(true);
         loadMonitors();
-    }, 15000);
+    }, 5000);
+
+    // Sincronizar IMEDIATAMENTE ao voltar para o app (útil no celular)
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            loadData(true);
+            loadMonitors();
+        }
+    });
 });
