@@ -18,12 +18,140 @@ document.addEventListener('DOMContentLoaded', () => {
         fEscola: document.getElementById('filterEscola'),
         fPaciente: document.getElementById('filterPaciente'),
         
-        navGravity: document.getElementById('navGravity'),
-        navGravityMobile: document.getElementById('navGravityMobile'),
         mainContainer: document.getElementById('mainContainer'),
         confirmModalOverlay: document.getElementById('confirmModalOverlay'),
         btnConfirmOk: document.getElementById('btnConfirmOk'),
-        btnConfirmCancel: document.getElementById('btnConfirmCancel')
+        btnConfirmCancel: document.getElementById('btnConfirmCancel'),
+
+        dashTotal: document.getElementById('dashTotal'),
+        dashMorning: document.getElementById('dashMorning'),
+        dashAfternoon: document.getElementById('dashAfternoon'),
+        dashDateLabel: document.getElementById('dashDateLabel'),
+        dashSchools: document.getElementById('dashSchools'),
+        dashTotalCard: document.getElementById('dashTotalCard'),
+        dashMorningCard: document.getElementById('dashMorningCard'),
+        dashAfternoonCard: document.getElementById('dashAfternoonCard')
+    };
+
+    function showToast(message, type = 'success') {
+        const container = document.getElementById('toastContainer');
+        if (!container) return;
+        const toast = document.createElement('div');
+        const icon = type === 'error' ? 'ph-warning-circle text-specRed' : 'ph-check-circle text-specGreen';
+        toast.className = `bg-white p-4 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] flex items-center gap-3 transform transition-all duration-300 translate-x-full opacity-0 pointer-events-auto border-l-4 ${type === 'error' ? 'border-specRed' : 'border-specGreen'}`;
+        toast.innerHTML = `<i class="ph ${icon} text-2xl"></i><span class="text-sm font-bold text-textMain">${message}</span>`;
+        container.appendChild(toast);
+        
+        requestAnimationFrame(() => {
+            toast.classList.remove('translate-x-full', 'opacity-0');
+        });
+
+        setTimeout(() => {
+            toast.classList.add('translate-x-full', 'opacity-0');
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    }
+    
+    function isAdmin() {
+        return sessionStorage.getItem('isAdmin') === 'true';
+    }
+
+    const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    }[char]));
+
+    const escapeJsString = (value) => String(value ?? '')
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/\r?\n/g, ' ')
+        .replace(/</g, '\\x3C')
+        .replace(/>/g, '\\x3E');
+
+    const parseJsonSafe = (value, fallback = {}) => {
+        try {
+            return JSON.parse(value || '{}');
+        } catch(e) {
+            return fallback;
+        }
+    };
+
+    const getWeekdayFromISO = (dateValue) => {
+        if (!dateValue) return '';
+        const [y, m, d] = dateValue.split('-');
+        const parsedDate = new Date(y, m - 1, d);
+        const weekdays = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+        return weekdays[parsedDate.getDay()] || '';
+    };
+
+    const ADMIN_PASSCODE_HASH = '158a323a7ba44870f23d96f1516dd70aa48e9a72db4ebb026b0a89e212a208ab';
+    const ADMIN_PASSCODE_FALLBACK_HASH = '143b42d57035cd';
+
+    function fallbackHash(value, seed = 0) {
+        let h1 = 0xdeadbeef ^ seed;
+        let h2 = 0x41c6ce57 ^ seed;
+        for (let i = 0, ch; i < value.length; i++) {
+            ch = value.charCodeAt(i);
+            h1 = Math.imul(h1 ^ ch, 2654435761);
+            h2 = Math.imul(h2 ^ ch, 1597334677);
+        }
+        h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+        h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+        return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16);
+    }
+
+    async function validateAdminPasscode(value) {
+        if (window.crypto?.subtle) {
+            const data = new TextEncoder().encode(value);
+            const digest = await crypto.subtle.digest('SHA-256', data);
+            const hash = Array.from(new Uint8Array(digest))
+                .map((byte) => byte.toString(16).padStart(2, '0'))
+                .join('');
+            return hash === ADMIN_PASSCODE_HASH;
+        }
+
+        return fallbackHash(value) === ADMIN_PASSCODE_FALLBACK_HASH;
+    }
+
+    const isAdminMode = () => !document.body.classList.contains('viewer-mode');
+
+    const requireAdmin = (actionName = 'esta ação') => {
+        if (isAdminMode()) return true;
+        alert(`Acesso restrito: faça login como admin para ${actionName}.`);
+        return false;
+    };
+
+    async function parseApiResponse(response) {
+        const rawText = await response.text();
+        let result = {};
+
+        if (rawText) {
+            try {
+                result = JSON.parse(rawText);
+            } catch(e) {
+                result = { ok: response.ok, message: rawText };
+            }
+        }
+
+        if (!response.ok && !Array.isArray(result)) {
+            throw new Error(result.message || `Falha HTTP ${response.status}`);
+        }
+
+        if (result && result.error) {
+            throw new Error(result.error);
+        }
+
+        return result;
+    }
+
+    const normalizeWhatsappPhone = (phoneValue) => {
+        const digits = String(phoneValue || '').replace(/\D/g, '');
+        if (!digits) return '';
+        if (digits.startsWith('55')) return digits;
+        return `55${digits}`;
     };
 
     // ---- Init Filters ----
@@ -34,16 +162,32 @@ document.addEventListener('DOMContentLoaded', () => {
     // ---- Data Management (Google Sheets API) ----
     const API_URL = "https://script.google.com/macros/s/AKfycbw6Dza5i3iQajXG2xA87zd_tn84H5j0z7YMwuCGnG1rNsWbkJiK6DKl1I2Hx-vI4aepNg/exec";
     let appointments = [];
-    let MONITORAS = JSON.parse(localStorage.getItem('lumina_monitoras')) || ["Vanessa", "Luciana", "Eliane", "Nenhuma"];
+    const DEFAULT_MONITORAS = ["Vanessa", "Luciana", "Eliane", "Nenhuma"];
+    let MONITORAS = parseJsonSafe(localStorage.getItem('lumina_monitoras'), null);
+    if (!Array.isArray(MONITORAS) || MONITORAS.length === 0) {
+        MONITORAS = [...DEFAULT_MONITORAS];
+    }
 
     async function loadData(silent = false) {
         if (!silent) {
-            DOM.agendaList.innerHTML = '<div class="py-12 flex flex-col items-center justify-center text-textMain/50 font-medium gap-4"><i class="ph ph-spinner-gap animate-spin text-4xl text-primaryStart"></i><div>Sincronizando com o Google Sheets...</div></div>';
+            const cachedData = localStorage.getItem('lumina_agenda_cache');
+            if (cachedData) {
+                try {
+                    appointments = JSON.parse(cachedData);
+                    updateFilterOptions();
+                    render();
+                } catch(e) {}
+            }
+            DOM.agendaList.innerHTML = '<div class="py-12 flex flex-col items-center justify-center text-textMain/50 font-medium gap-4"><i class="ph ph-spinner-gap animate-spin text-4xl text-primaryStart"></i><div>Sincronizando com a Nuvem...</div></div>';
         }
         
         try {
+            if (!navigator.onLine) {
+                if (!silent) showToast('Você está offline. Exibindo dados em cache.', 'error');
+                return;
+            }
             const response = await fetch(API_URL + "?nocache=" + Date.now(), { cache: 'no-store' });
-            const data = await response.json();
+            const data = await parseApiResponse(response);
             
             const formatTime = (val) => {
                 if (!val) return '';
@@ -81,11 +225,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (silent) {
                     if (JSON.stringify(appointments) !== JSON.stringify(newData)) {
                         appointments = newData;
+                        localStorage.setItem('lumina_agenda_cache', JSON.stringify(newData));
                         updateFilterOptions();
-                        if (!gravityActive) render();
+                        render();
                     }
                 } else {
                     appointments = newData;
+                    localStorage.setItem('lumina_agenda_cache', JSON.stringify(newData));
                     updateFilterOptions();
                     render();
                 }
@@ -108,9 +254,8 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadMonitors() {
         try {
             const response = await fetch(API_URL + "?sheet=monitors&nocache=" + Date.now());
-            const data = await response.json();
+            const data = await parseApiResponse(response);
             if (Array.isArray(data)) {
-                // Mapeia para pegar apenas os nomes das monitoras (aceita Monitora ou monitora)
                 const names = data.map(m => m.monitora || m.Monitora || m.MONITORA).filter(Boolean);
                 if (names.length > 0) {
                     MONITORAS = names;
@@ -124,6 +269,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ---- Drawer Logic ----
     function openDrawer(mode = 'create', id = null) {
+        if (!requireAdmin(mode === 'edit' ? 'editar agendamentos' : 'criar agendamentos')) return;
         
         DOM.drawerOverlay.classList.remove('opacity-0', 'pointer-events-none');
         DOM.drawerOverlay.classList.add('opacity-100', 'pointer-events-auto');
@@ -203,7 +349,25 @@ document.addEventListener('DOMContentLoaded', () => {
     DOM.form.addEventListener('submit', async (e) => {
         e.preventDefault();
         
+        if (!isAdmin()) {
+            showToast('Acesso negado. Faça login como coordenador.', 'error');
+            return;
+        }
+
         const submitBtn = DOM.form.querySelector('button[type="submit"]');
+        const fInicio = document.getElementById('formInicio').value;
+        const fTermino = document.getElementById('formTermino').value;
+        if (fInicio && fTermino && fInicio > fTermino) {
+            showToast('O horário de início não pode ser maior que o término.', 'error');
+            return;
+        }
+        
+        const fPaciente = document.getElementById('formPaciente').value.trim();
+        if (fPaciente.length < 3) {
+            showToast('O nome do paciente é muito curto.', 'error');
+            return;
+        }
+
         const originalText = submitBtn.innerHTML;
         submitBtn.innerHTML = '<i class="ph ph-spinner-gap animate-spin text-xl inline-block mr-2"></i> Salvando na Planilha...';
         submitBtn.disabled = true;
@@ -219,10 +383,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const dataInicioVal = document.getElementById('formDataInicio') ? document.getElementById('formDataInicio').value : '';
         let diaCalculado = '';
         if (dataInicioVal) {
-            const [y, m, d] = dataInicioVal.split('-');
-            const dummyDate = new Date(y, m-1, d);
-            const weekdays = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
-            diaCalculado = weekdays[dummyDate.getDay()];
+            diaCalculado = getWeekdayFromISO(dataInicioVal);
         }
 
         const newRecord = {
@@ -243,7 +404,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const action = id ? 'UPDATE' : 'CREATE';
 
-        // Preserve excecoes if it exists
         if (id) {
             const existing = appointments.find(a => String(a.id) === String(id));
             if (existing && existing.excecoes) {
@@ -257,7 +417,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                 body: JSON.stringify({ action: action, data: newRecord })
             });
-            const result = await resp.json();
+            await parseApiResponse(resp);
             
             if (id) {
                 const idx = appointments.findIndex(a => String(a.id) === String(id));
@@ -265,13 +425,15 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 appointments.push(newRecord);
             }
+            localStorage.setItem('lumina_agenda_cache', JSON.stringify(appointments));
             
             updateFilterOptions();
             render();
             closeDrawer();
+            showToast(id ? 'Agendamento atualizado!' : 'Agendamento criado!');
         } catch(e) {
             console.error(e);
-            alert('Falha ao comunicar com o Google Sheets.');
+            showToast('Falha ao comunicar com o banco.', 'error');
         } finally {
             submitBtn.innerHTML = originalText;
             submitBtn.disabled = false;
@@ -279,39 +441,123 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     window.deleteAppointment = async (id) => {
-        if(gravityActive) return;
-        if(confirm('Excluir este agendamento do Google Sheets definitivamente?')) {
-            DOM.agendaList.innerHTML = '<div class="py-12 flex flex-col items-center gap-2"><i class="ph ph-spinner-gap animate-spin text-2xl text-red-500"></i> Excluindo da planilha...</div>';
+        if (!isAdmin()) {
+            showToast('Acesso negado.', 'error');
+            return;
+        }
+        if(confirm('Excluir este agendamento definitivamente?')) {
+            DOM.agendaList.innerHTML = '<div class="py-12 flex flex-col items-center gap-2"><i class="ph ph-spinner-gap animate-spin text-2xl text-red-500"></i> Excluindo...</div>';
             
             try {
-                await fetch(API_URL, {
+                const response = await fetch(API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                     body: JSON.stringify({ action: 'DELETE', id: id })
                 });
+                await parseApiResponse(response);
                 
                 appointments = appointments.filter(a => String(a.id) !== String(id));
+                localStorage.setItem('lumina_agenda_cache', JSON.stringify(appointments));
                 updateFilterOptions();
                 render();
+                showToast('Excluído com sucesso!');
             } catch(e) {
                 console.error(e);
-                alert("Erro ao tentar deletar na Nuvem.");
-                render(); // Restore UI on failure
+                showToast("Erro ao tentar deletar na Nuvem.", 'error');
+                render(); 
             }
         }
     };
 
-    window.editAppointment = (id) => openDrawer('edit', id);
+    window.editAppointment = (id) => {
+        if (!isAdmin()) {
+            showToast('Acesso negado.', 'error');
+            return;
+        }
+        openDrawer('edit', id);
+    };
 
     [DOM.fData, DOM.fProf, DOM.fTurno, DOM.fEscola].forEach(el => {
         if(el) el.addEventListener('change', render);
     });
+
+    const btnPrint = document.getElementById('btnPrint');
+    if (btnPrint) {
+        btnPrint.addEventListener('click', () => {
+            window.print();
+        });
+    }
+
     if (DOM.fPaciente) {
-        DOM.fPaciente.addEventListener('input', render);
+        let debounceTimer;
+        DOM.fPaciente.addEventListener('input', () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => render(), 300);
+        });
+    }
+
+    const btnPrevDay = document.getElementById('btnPrevDay');
+    const btnNextDay = document.getElementById('btnNextDay');
+    
+    function shiftDate(days) {
+        if (!DOM.fData.value) return;
+        const [y, m, d] = DOM.fData.value.split('-');
+        const date = new Date(y, m - 1, d);
+        date.setDate(date.getDate() + days);
+        if (date.getDay() === 0) date.setDate(date.getDate() + (days > 0 ? 1 : -2));
+        if (date.getDay() === 6 && days > 0) date.setDate(date.getDate() + 2);
+        
+        DOM.fData.value = date.toISOString().split('T')[0];
+        render();
+    }
+
+    if (btnPrevDay) btnPrevDay.addEventListener('click', () => shiftDate(-1));
+    if (btnNextDay) btnNextDay.addEventListener('click', () => shiftDate(1));
+
+    const btnClearFilters = document.getElementById('btnClearFilters');
+    function updateClearFiltersButton() {
+        if (!btnClearFilters) return;
+        const hasFilter = DOM.fProf.value || DOM.fTurno.value || DOM.fEscola.value || (DOM.fPaciente && DOM.fPaciente.value);
+        if (hasFilter) {
+            btnClearFilters.classList.remove('hidden');
+        } else {
+            btnClearFilters.classList.add('hidden');
+        }
+    }
+
+    if (btnClearFilters) {
+        btnClearFilters.addEventListener('click', () => {
+            if (DOM.fProf) DOM.fProf.value = '';
+            if (DOM.fTurno) DOM.fTurno.value = '';
+            if (DOM.fEscola) DOM.fEscola.value = '';
+            if (DOM.fPaciente) DOM.fPaciente.value = '';
+            render();
+        });
+    }
+
+    if (DOM.dashTotalCard) {
+        DOM.dashTotalCard.addEventListener('click', () => {
+            if (DOM.fTurno) DOM.fTurno.value = '';
+            if (DOM.fEscola) DOM.fEscola.value = '';
+            render();
+        });
+    }
+
+    if (DOM.dashMorningCard) {
+        DOM.dashMorningCard.addEventListener('click', () => {
+            if (DOM.fTurno) DOM.fTurno.value = 'Manhã';
+            render();
+        });
+    }
+
+    if (DOM.dashAfternoonCard) {
+        DOM.dashAfternoonCard.addEventListener('click', () => {
+            if (DOM.fTurno) DOM.fTurno.value = 'Tarde';
+            render();
+        });
     }
 
     function updateFilterOptions() {
-        // Build set of unique entries
         const profs = new Set(), escolas = new Set();
         appointments.forEach(a => {
             if(a.profissional) profs.add(a.profissional);
@@ -333,6 +579,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         sortAndPopulate(profs, DOM.fProf);
         sortAndPopulate(escolas, DOM.fEscola);
+
     }
 
     // ---- Admin Role Logic ----
@@ -340,14 +587,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnAdminLogout = document.getElementById('btnAdminLogout');
     
     if (btnAdminLogin) {
-        btnAdminLogin.addEventListener('click', () => {
+        btnAdminLogin.addEventListener('click', async () => {
             const senha = prompt("Acesso Restrito. Digite a senha da coordenação:");
-            if (senha === "2026") {
+            if (!senha) return;
+
+            const isValidPasscode = await validateAdminPasscode(senha);
+            if (isValidPasscode) {
                 document.body.classList.remove('viewer-mode');
                 btnAdminLogin.classList.add('hidden');
                 btnAdminLogout.classList.remove('hidden');
                 sessionStorage.setItem('isAdmin', 'true');
-            } else if (senha !== null && senha !== "") {
+            } else {
                 alert("Senha incorreta!");
             }
         });
@@ -368,35 +618,169 @@ document.addEventListener('DOMContentLoaded', () => {
         if (btnAdminLogout) btnAdminLogout.classList.remove('hidden');
     }
 
-    // ---- Render logic ----
-    function render() {
+    function getDateFilterInfo() {
         const dateRef = DOM.fData ? DOM.fData.value : null;
-        let targetWeekday = '';
-        if (dateRef) {
-            const [y, m, d] = dateRef.split('-');
-            const dummyDate = new Date(y, m-1, d);
-            const weekdays = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
-            targetWeekday = weekdays[dummyDate.getDay()];
-        }
+        return {
+            dateRef,
+            targetWeekday: getWeekdayFromISO(dateRef)
+        };
+    }
 
-        let filtered = appointments.filter(a => {
+    function getFilteredAppointments({ ignoreTurno = false, ignoreEscola = false } = {}) {
+        const { dateRef, targetWeekday } = getDateFilterInfo();
+
+        return appointments.filter(a => {
             const dateMatch = !targetWeekday || a.dia === targetWeekday;
             const pMatch = !DOM.fProf.value || a.profissional === DOM.fProf.value;
-            const tMatch = !DOM.fTurno.value || a.turno === DOM.fTurno.value;
-            const eMatch = !DOM.fEscola.value || a.escola === DOM.fEscola.value;
-            
+            const tMatch = ignoreTurno || !DOM.fTurno.value || a.turno === DOM.fTurno.value;
+            const eMatch = ignoreEscola || !DOM.fEscola.value || a.escola === DOM.fEscola.value;
+
             const searchVal = DOM.fPaciente ? DOM.fPaciente.value.toLowerCase() : '';
             const pacienteMatch = !searchVal || (a.paciente && a.paciente.toLowerCase().includes(searchVal));
-            
+
             let started = true;
             if (dateRef && a.dataInicio) {
-                if (dateRef < a.dataInicio) {
-                    started = false;
-                }
+                if (dateRef < a.dataInicio) started = false;
             }
-            
+
             return dateMatch && pMatch && tMatch && eMatch && started && pacienteMatch;
         });
+    }
+
+    function renderDashboard(filtered) {
+        if (!DOM.dashTotal) return;
+
+        const { dateRef } = getDateFilterInfo();
+
+        const isCancelledFn = (item) => {
+            if (!dateRef) return false;
+            const exc = parseJsonSafe(item.excecoes, {});
+            const rawValue = exc[dateRef];
+            if (rawValue) {
+                return (typeof rawValue === 'object') ? rawValue.status === 'CANCELADO' : rawValue === 'CANCELADO';
+            }
+            return false;
+        };
+
+        // Total: respeita todos os filtros ativos
+        const activeFiltered = filtered.filter(a => !isCancelledFn(a));
+
+        // Manhã/Tarde: ignora filtro de turno mas respeita escola/profissional/busca
+        const byTurnoBase = getFilteredAppointments({ ignoreTurno: true }).filter(a => !isCancelledFn(a));
+        const morningCount = byTurnoBase.filter(a => a.turno === 'Manhã').length;
+        const afternoonCount = byTurnoBase.filter(a => a.turno === 'Tarde').length;
+
+        // Escolas: ignora filtro de escola, mas respeita turno/profissional/busca
+        const byEscolaBase = getFilteredAppointments({ ignoreEscola: true }).filter(a => !isCancelledFn(a));
+
+        // Monitoras: resumo informativo, sem filtragem por monitora
+        const byMonitoraBase = filtered.filter(a => !isCancelledFn(a));
+
+        DOM.dashTotal.textContent = activeFiltered.length;
+        DOM.dashMorning.textContent = morningCount;
+        DOM.dashAfternoon.textContent = afternoonCount;
+
+        if (DOM.dashDateLabel) {
+            const labelDate = dateRef ? new Date(`${dateRef}T12:00:00`) : new Date();
+            DOM.dashDateLabel.textContent = new Intl.DateTimeFormat('pt-BR', {
+                weekday: 'short',
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            }).format(labelDate);
+        }
+
+        DOM.dashMorningCard?.classList.toggle('active', DOM.fTurno?.value === 'Manhã');
+        DOM.dashAfternoonCard?.classList.toggle('active', DOM.fTurno?.value === 'Tarde');
+        DOM.dashTotalCard?.classList.toggle('active', !DOM.fTurno?.value && !DOM.fEscola?.value);
+
+        // ---- Contagem de escolas ----
+        const schoolCounts = new Map();
+        byEscolaBase.forEach(item => {
+            const school = item.escola;
+            if (school) schoolCounts.set(school, (schoolCounts.get(school) || 0) + 1);
+        });
+
+        const dashSchoolsEl = document.getElementById('dashSchools');
+        const dashSchoolsCount = document.getElementById('dashSchoolsCount');
+        if (dashSchoolsCount) dashSchoolsCount.textContent = schoolCounts.size;
+
+        if (dashSchoolsEl) {
+            dashSchoolsEl.innerHTML = '';
+            const schools = Array.from(schoolCounts.entries())
+                .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+                .slice(0, 8);
+
+            if (schools.length === 0) {
+                dashSchoolsEl.innerHTML = '<div class="text-xs font-semibold text-textMain/45">Sem dados para exibir</div>';
+            } else {
+                schools.forEach(([school, count]) => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'dashboard-school-row';
+                    btn.classList.toggle('active', DOM.fEscola?.value === school);
+                    btn.title = school;
+                    btn.innerHTML = `<span></span><strong></strong>`;
+                    btn.querySelector('span').textContent = school;
+                    btn.querySelector('strong').textContent = count;
+                    btn.addEventListener('click', () => {
+                        if (!DOM.fEscola) return;
+                        DOM.fEscola.value = DOM.fEscola.value === school ? '' : school;
+                        render();
+                    });
+                    dashSchoolsEl.appendChild(btn);
+                });
+            }
+        }
+
+        // ---- Contagem de monitoras (lê exceções do dia) ----
+        const monitorCounts = new Map();
+        byMonitoraBase.forEach(item => {
+            const exc = parseJsonSafe(item.excecoes, {});
+            const rawValue = dateRef ? exc[dateRef] : null;
+            let todayMonitor = '';
+            if (rawValue && typeof rawValue === 'object') {
+                todayMonitor = rawValue.monitora || '';
+            }
+            // fallback: monitora padrão do agendamento
+            if (!todayMonitor) todayMonitor = item.monitora || '';
+            if (todayMonitor) {
+                monitorCounts.set(todayMonitor, (monitorCounts.get(todayMonitor) || 0) + 1);
+            }
+        });
+
+        const dashMonitorsEl = document.getElementById('dashMonitors');
+        const dashMonitorsCount = document.getElementById('dashMonitorsCount');
+        if (dashMonitorsCount) dashMonitorsCount.textContent = monitorCounts.size;
+
+        if (dashMonitorsEl) {
+            dashMonitorsEl.innerHTML = '';
+            const monitors = Array.from(monitorCounts.entries())
+                .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+
+            if (monitors.length === 0) {
+                dashMonitorsEl.innerHTML = '<div class="text-xs font-semibold text-textMain/45">Nenhuma monitora escalada</div>';
+            } else {
+                monitors.forEach(([monitor, count]) => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'dashboard-school-row monitor-row';
+                    btn.title = monitor;
+                    btn.innerHTML = `<span></span><strong></strong>`;
+                    btn.querySelector('span').textContent = monitor;
+                    btn.querySelector('strong').textContent = count;
+                    btn.disabled = true;
+                    dashMonitorsEl.appendChild(btn);
+                });
+            }
+        }
+    }
+
+    // ---- Render logic ----
+    function render() {
+        updateClearFiltersButton();
+        const { dateRef } = getDateFilterInfo();
+        let filtered = getFilteredAppointments();
 
         filtered.sort((a, b) => {
             const timeA = a.inicio || '24:00';
@@ -406,6 +790,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         DOM.count.textContent = filtered.length;
         if (DOM.countMobile) DOM.countMobile.textContent = filtered.length;
+        renderDashboard(filtered);
         DOM.agendaList.innerHTML = '';
 
         if (filtered.length === 0) {
@@ -415,7 +800,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         filtered.forEach(item => {
             let exc = {};
-            try { exc = JSON.parse(item.excecoes || '{}'); } catch(e){}
+            exc = parseJsonSafe(item.excecoes, {});
             const rawValue = dateRef ? exc[dateRef] : null;
             let todayStatus = '';
             let todayMonitor = '';
@@ -440,46 +825,57 @@ document.addEventListener('DOMContentLoaded', () => {
             const cancelColor = isCancelled ? 'bg-specRed text-white border-specRed shadow-sm' : 'bg-surface border-textMain/10 text-textMain/40 hover:border-specRed hover:text-specRed';
 
             const pillClass = item.turno === 'Manhã' ? 'manha' : 'tarde';
-            const phone = item.telefone ? String(item.telefone).replace(/\D/g, '') : '';
-            const wppLink = phone ? `https://wa.me/55${phone}` : '#';
+            const phone = normalizeWhatsappPhone(item.telefone);
+            const wppLink = phone ? `https://wa.me/${phone}` : '#';
             
             const trType = item.transporte;
             const repEntrada = (trType === 'Entrada' || trType === 'Ambos' || trType === true || !trType);
             const repSaida = (trType === 'Saída' || trType === 'Ambos' || trType === true || !trType);
+            const itemIdJs = escapeJsString(item.id);
+            const patientNameText = item.paciente || 'Sem paciente';
+            const patientNameHtml = escapeHtml(patientNameText);
+            const profissionalHtml = escapeHtml(item.profissional || 'Sem profissional');
+            const tipoHtml = escapeHtml(item.tipo || 'Sem atendimento');
+            const turnoHtml = escapeHtml(item.turno || '');
+            const inicioHtml = escapeHtml(item.inicio || '--');
+            const terminoHtml = escapeHtml(item.termino || '--');
+            const diaHtml = escapeHtml(item.dia || '');
+            const escolaHtml = escapeHtml(item.escola || '');
+            const obsHtml = escapeHtml(item.obs || '');
 
             let actionButtons = '';
             if (dateRef) {
                 let btnsHtml = '';
-                const pName = (item.paciente || 'paciente').replace(/'/g, "\\'");
+                const pName = escapeJsString(patientNameText);
                 if (repEntrada) {
                     btnsHtml += `
-                    <button class="flex-1 py-1.5 sm:py-2 rounded-xl border-2 font-display font-bold text-[0.65rem] sm:text-xs flex items-center justify-center gap-1 sm:gap-2 transition-all ${checkColorEntrada}" onclick="confirmStatusChange('${item.id}', '${dateRef}', 'ENTRADA', '${pName}')">
+                    <button class="flex-1 py-1.5 rounded-lg border-2 font-display font-bold text-[0.65rem] sm:text-[0.7rem] flex items-center justify-center gap-1 transition-all ${checkColorEntrada}" onclick="confirmStatusChange('${itemIdJs}', '${dateRef}', 'ENTRADA', '${pName}')">
                         <i class="ph ${isCompletedEntrada ? 'ph-check-circle' : 'ph-sign-in'} text-base"></i> Entrada
                     </button>`;
                 }
                 if (repSaida) {
                     btnsHtml += `
-                    <button class="flex-1 py-1.5 sm:py-2 rounded-xl border-2 font-display font-bold text-[0.65rem] sm:text-xs flex items-center justify-center gap-1 sm:gap-2 transition-all ${checkColorSaida}" onclick="confirmStatusChange('${item.id}', '${dateRef}', 'SAIDA', '${pName}')">
+                    <button class="flex-1 py-1.5 rounded-lg border-2 font-display font-bold text-[0.65rem] sm:text-[0.7rem] flex items-center justify-center gap-1 transition-all ${checkColorSaida}" onclick="confirmStatusChange('${itemIdJs}', '${dateRef}', 'SAIDA', '${pName}')">
                         <i class="ph ${isCompletedSaida ? 'ph-check-circle' : 'ph-sign-out'} text-base"></i> Saída
                     </button>`;
                 }
                 btnsHtml += `
-                <button class="flex-1 py-1.5 sm:py-2 rounded-xl border-2 font-display font-bold text-[0.65rem] sm:text-xs flex items-center justify-center gap-1 sm:gap-2 transition-all ${cancelColor}" onclick="confirmStatusChange('${item.id}', '${dateRef}', 'CANCELADO', '${pName}')">
+                <button class="flex-1 py-1.5 rounded-lg border-2 font-display font-bold text-[0.65rem] sm:text-[0.7rem] flex items-center justify-center gap-1 transition-all ${cancelColor}" onclick="confirmStatusChange('${itemIdJs}', '${dateRef}', 'CANCELADO', '${pName}')">
                     <i class="ph ${isCancelled ? 'ph-x-circle' : 'ph-x'} text-base"></i> Não irá
                 </button>`;
 
-                const monitorOptions = MONITORAS.map(m => `<option value="${m}" ${todayMonitor === m ? 'selected' : ''}>${m}</option>`).join('');
+                const monitorOptions = MONITORAS.map(m => `<option value="${escapeHtml(m)}" ${todayMonitor === m ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('');
 
                 actionButtons = `
-                <div class="mt-3 pt-3 border-t border-textMain/5 flex flex-col gap-3 pointer-events-auto relative z-20">
-                    <div class="flex items-center gap-2">
+                <div class="mt-1.5 pt-2 border-t border-textMain/5 flex flex-col gap-2 pointer-events-auto relative z-20">
+                    <div class="flex items-center gap-1.5">
                         <label class="text-[0.6rem] font-bold text-textMain/40 uppercase tracking-widest whitespace-nowrap">Monitora:</label>
-                        <select class="flex-1 bg-surface border border-textMain/10 rounded-lg px-2 py-1 text-xs font-medium outline-none" onchange="window.updateDailyMonitor('${item.id}', '${dateRef}', this.value)">
+                        <select class="flex-1 bg-surface border border-textMain/10 rounded-lg px-2 py-1 text-xs font-medium outline-none" onchange="window.updateDailyMonitor('${itemIdJs}', '${dateRef}', this.value)">
                             <option value="">Selecionar...</option>
                             ${monitorOptions}
                         </select>
                     </div>
-                    <div class="flex gap-2">
+                    <div class="flex gap-1.5">
                         ${btnsHtml}
                     </div>
                 </div>`;
@@ -495,25 +891,26 @@ document.addEventListener('DOMContentLoaded', () => {
             card.className = 'agenda-card transition-all duration-300 ' + cardOpacity;
             card.dataset.id = item.id;
             card.dataset.inicio = item.inicio || '';
+            card.dataset.cancelled = isCancelled ? 'true' : 'false';
             card.dataset.fullydone = fullyDone ? 'true' : 'false';
             card.innerHTML = `
                 <div class="turno-pill ${pillClass}"></div>
-                <div class="card-header">
+                <div class="card-header flex items-start justify-between gap-3">
                     <div>
-                        <div class="flex items-center gap-2 mb-1">
-                            <div class="font-display font-bold text-specBlue text-[0.7rem] bg-specBlue/10 px-2 py-0.5 rounded-md">
+                        <div class="flex items-center gap-1.5 mb-0.5">
+                            <div class="font-display font-bold text-specBlue text-[0.65rem] bg-specBlue/10 px-1.5 py-0.5 rounded-md">
                                 <i class="ph ph-clock mr-1"></i>
-                                ${item.inicio || '--'} às ${item.termino || '--'}
+                                ${inicioHtml} às ${terminoHtml}
                             </div>
-                            <span class="text-[0.65rem] font-bold text-textMain/50 uppercase tracking-widest">${item.turno}</span>
+                            <span class="text-[0.6rem] font-bold text-textMain/50 uppercase tracking-widest">${turnoHtml}</span>
                         </div>
-                        <h3 class="patient-name px-1">${item.paciente}</h3>
+                        <h3 class="patient-name">${patientNameHtml}</h3>
                     </div>
                     <div class="card-actions pointer-events-auto admin-only">
-                        <button class="btn-icon edit pointer-events-auto" onclick="editAppointment('${item.id}')">
+                        <button class="btn-icon edit pointer-events-auto" onclick="editAppointment('${itemIdJs}')">
                             <i class="ph ph-pencil-simple text-lg"></i>
                         </button>
-                        <button class="btn-icon delete pointer-events-auto" onclick="deleteAppointment('${item.id}')">
+                        <button class="btn-icon delete pointer-events-auto" onclick="deleteAppointment('${itemIdJs}')">
                             <i class="ph ph-trash text-lg"></i>
                         </button>
                     </div>
@@ -524,24 +921,24 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span class="detail-label">Profissional & Atendimento</span>
                         <span class="detail-value">
                             <div class="w-5 h-5 rounded-full bg-specPurple/10 shadow-sm flex items-center justify-center text-specPurple"><i class="ph ph-user"></i></div>
-                            ${item.profissional} &bull; ${item.tipo}
+                            ${profissionalHtml} &bull; ${tipoHtml}
                         </span>
                     </div>
                     <div class="detail-item">
                         <span class="detail-label">Data</span>
-                        <span class="detail-value"><i class="ph ph-calendar-blank text-textMain/50 text-base"></i> ${item.dia}</span>
+                        <span class="detail-value"><i class="ph ph-calendar-blank text-textMain/50 text-base"></i> ${diaHtml}</span>
                     </div>
                     ${item.escola ? `
                     <div class="detail-item">
                         <span class="detail-label">Instituição</span>
-                        <span class="detail-value"><i class="ph ph-buildings text-textMain/50 text-base"></i> ${item.escola}</span>
+                        <span class="detail-value"><i class="ph ph-buildings text-textMain/50 text-base"></i> ${escolaHtml}</span>
                     </div>` : ''}
                 </div>
 
-                <div class="flex justify-between items-center mt-2 px-1">
-                    <div class="flex gap-2">
+                <div class="flex justify-between items-center mt-0.5 gap-2">
+                    <div class="flex gap-1.5 flex-wrap">
                         <span class="badge"><i class="ph ph-bus text-specGreen"></i> ${trType === 'Entrada' ? 'Somente Entrada' : (trType === 'Saída' ? 'Somente Saída' : 'Ida e Volta')}</span>
-                        ${item.obs ? `<span class="badge bg-specYellow/10 text-specYellow"><i class="ph ph-info"></i> ${item.obs}</span>` : ''}
+                        ${item.obs ? `<span class="badge bg-specYellow/10 text-specYellow"><i class="ph ph-info"></i> ${obsHtml}</span>` : ''}
                     </div>
                     ${!isCancelled ? `<a href="${wppLink}" target="_blank" class="whatsapp-link relative z-20 pointer-events-auto"><i class="ph ph-whatsapp-logo text-xl"></i> Contatar</a>` : ''}
                 </div>
@@ -585,8 +982,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (itemIdx === -1) return;
         
         const item = appointments[itemIdx];
-        let exc = {};
-        try { exc = JSON.parse(item.excecoes || '{}'); } catch(e){}
+        const previousExcecoes = item.excecoes || '';
+        let exc = parseJsonSafe(item.excecoes, {});
         
         const rawValue = exc[dateStr];
         let currentStatus = '';
@@ -623,16 +1020,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         item.excecoes = JSON.stringify(exc);
-        render(); // Optimistic UI update
+        localStorage.setItem('lumina_agenda_cache', JSON.stringify(appointments));
+        render();
         
         try {
-            await fetch(API_URL, {
+            const response = await fetch(API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                 body: JSON.stringify({ action: 'UPDATE', data: item })
             });
+            await parseApiResponse(response);
         } catch (e) {
             console.error(e);
+            item.excecoes = previousExcecoes;
+            render();
+            alert('Não foi possível atualizar o status na nuvem.');
         }
     };
 
@@ -641,8 +1043,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (itemIdx === -1) return;
         
         const item = appointments[itemIdx];
-        let exc = {};
-        try { exc = JSON.parse(item.excecoes || '{}'); } catch(e){}
+        const previousExcecoes = item.excecoes || '';
+        let exc = parseJsonSafe(item.excecoes, {});
         
         const rawValue = exc[dateStr];
         let currentStatus = '';
@@ -662,18 +1064,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         item.excecoes = JSON.stringify(exc);
-        
-        // Feedback visual imediato (Opcional: renderizar se necessário)
-        // render(); 
+        localStorage.setItem('lumina_agenda_cache', JSON.stringify(appointments));
 
         try {
-            await fetch(API_URL, {
+            const response = await fetch(API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                 body: JSON.stringify({ action: 'UPDATE', data: item })
             });
+            await parseApiResponse(response);
         } catch (e) {
             console.error(e);
+            item.excecoes = previousExcecoes;
+            render();
+            alert('Não foi possível atualizar a monitora na nuvem.');
         }
     };
 
@@ -688,6 +1092,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const monitorsListContainer = document.getElementById('monitorsList');
 
     function openMonitorsModal() {
+        if (!requireAdmin('gerenciar monitoras')) return;
         renderMonitorsList();
         monitorsModalOverlay.classList.add('active');
         monitorsModal.classList.add('active');
@@ -696,7 +1101,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function closeMonitorsModal() {
         monitorsModalOverlay.classList.remove('active');
         monitorsModal.classList.remove('active');
-        render(); // Re-render agenda to show updated list
+        render();
     }
 
     function renderMonitorsList() {
@@ -704,12 +1109,15 @@ document.addEventListener('DOMContentLoaded', () => {
         MONITORAS.forEach((m, index) => {
             const item = document.createElement('div');
             item.className = 'flex items-center justify-between p-3 bg-surface rounded-xl mb-2 group transition-all hover:bg-white hover:shadow-sm';
-            item.innerHTML = `
-                <span class="font-medium text-sm text-textMain">${m}</span>
-                <button class="text-textMain/20 hover:text-specRed transition-colors opacity-0 group-hover:opacity-100" onclick="window.removeMonitor(${index})">
-                    <i class="ph ph-trash text-lg"></i>
-                </button>
-            `;
+            const name = document.createElement('span');
+            name.className = 'font-medium text-sm text-textMain';
+            name.textContent = m;
+            const removeButton = document.createElement('button');
+            removeButton.className = 'text-textMain/20 hover:text-specRed transition-colors opacity-0 group-hover:opacity-100';
+            removeButton.innerHTML = '<i class="ph ph-trash text-lg"></i>';
+            removeButton.addEventListener('click', () => window.removeMonitor(index));
+            item.appendChild(name);
+            item.appendChild(removeButton);
             monitorsListContainer.appendChild(item);
         });
     }
@@ -719,16 +1127,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     window.removeMonitor = async (index) => {
+        if (!requireAdmin('remover monitoras')) return;
         const monitorName = MONITORAS[index];
         
         try {
             const response = await fetch(API_URL + "?sheet=monitors");
-            const cloudData = await response.json();
+            const cloudData = await parseApiResponse(response);
             const monitorEntry = cloudData.find(m => (m.monitora || m.Monitora || m.MONITORA) === monitorName);
             
             if (monitorEntry) {
                 const targetId = monitorEntry.id || monitorEntry.ID;
-                await fetch(API_URL, {
+                const deleteResponse = await fetch(API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                     body: JSON.stringify({ 
@@ -737,8 +1146,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         id: targetId 
                     })
                 });
+                await parseApiResponse(deleteResponse);
             }
-        } catch(e) { console.error(e); }
+        } catch(e) {
+            console.error(e);
+            alert('Não foi possível remover a monitora na nuvem.');
+            return;
+        }
 
         MONITORAS.splice(index, 1);
         renderMonitorsList();
@@ -746,12 +1160,13 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     btnAddMonitor.addEventListener('click', async () => {
+        if (!requireAdmin('adicionar monitoras')) return;
         const name = newMonitorNameInput.value.trim();
         if (name && !MONITORAS.includes(name)) {
             const newId = Date.now().toString();
             
             try {
-                await fetch(API_URL, {
+                const response = await fetch(API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                     body: JSON.stringify({ 
@@ -760,7 +1175,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         data: { id: newId, monitora: name } 
                     })
                 });
-            } catch(e) { console.error(e); }
+                await parseApiResponse(response);
+            } catch(e) {
+                console.error(e);
+                alert('Não foi possível adicionar a monitora na nuvem.');
+                return;
+            }
 
             MONITORAS.push(name);
             newMonitorNameInput.value = '';
@@ -779,190 +1199,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target.id === 'monitorsModalOverlay') closeMonitorsModal();
     });
 
-    // ---- Matter.js Anti-Gravity (V2 Refined) ----
-    let gravityActive = false;
-    let engine, renderMatter, runner, mouse, mouseConstraint;
-    let bodiesMap = new Map();
-    let originalCardStyles = new Map();
-
-    const toggleGravityHandler = (e) => {
-        e.preventDefault();
-        if (gravityActive) stopGravity();
-        else startGravity();
-    };
-
-    // DOM.navGravity.addEventListener('click', toggleGravityHandler);
-    // if (DOM.navGravityMobile) DOM.navGravityMobile.addEventListener('click', toggleGravityHandler);
-
-    function startGravity() {
-        const cards = document.querySelectorAll('.agenda-card');
-        if (cards.length === 0) return;
-
-        gravityActive = true;
-        document.body.classList.add('gravity-master');
-        DOM.navGravity.innerHTML = '<i class="ph ph-arrows-in text-xl text-primaryStart"></i> Restaurar Ordem';
-        DOM.navGravity.classList.add('bg-white', 'text-textMain', 'shadow-atmospheric');
-        DOM.navGravity.classList.remove('text-textMain/60');
-        
-        if (DOM.navGravityMobile) {
-            DOM.navGravityMobile.innerHTML = '<i class="ph ph-arrows-in text-xl text-primaryStart"></i>';
-        }
-
-        originalCardStyles.clear();
-        bodiesMap.clear();
-
-        const Engine = Matter.Engine,
-              Render = Matter.Render,
-              Runner = Matter.Runner,
-              Bodies = Matter.Bodies,
-              Composite = Matter.Composite,
-              Mouse = Matter.Mouse,
-              MouseConstraint = Matter.MouseConstraint;
-
-        engine = Engine.create();
-        const world = engine.world;
-        engine.world.gravity.y = 1;
-
-        const mainRect = DOM.mainContainer.getBoundingClientRect();
-        const mainW = mainRect.width;
-        const mainH = mainRect.height;
-
-        const canvasContainer = document.createElement('div');
-        canvasContainer.id = 'gravity-canvas-wrapper';
-        canvasContainer.style.left = mainRect.left + 'px';
-        canvasContainer.style.top = mainRect.top + 'px';
-        canvasContainer.style.width = mainW + 'px';
-        canvasContainer.style.height = mainH + 'px';
-        document.body.appendChild(canvasContainer);
-
-        renderMatter = Render.create({
-            element: canvasContainer,
-            engine: engine,
-            options: {
-                width: mainW,
-                height: mainH,
-                wireframes: false,
-                background: 'transparent'
-            }
-        });
-        renderMatter.canvas.style.opacity = '0'; 
-
-        const ground = Bodies.rectangle(mainW/2, mainH + 50, mainW + 500, 100, { isStatic: true });
-        const leftWall = Bodies.rectangle(-50, mainH/2, 100, mainH * 2, { isStatic: true });
-        const rightWall = Bodies.rectangle(mainW + 50, mainH/2, 100, mainH * 2, { isStatic: true });
-        const ceiling = Bodies.rectangle(mainW/2, -500, mainW * 2, 100, { isStatic: true });
-
-        Composite.add(world, [ground, leftWall, rightWall, ceiling]);
-
-        cards.forEach(card => {
-            const rect = card.getBoundingClientRect();
-            const relX = rect.left - mainRect.left;
-            const relY = rect.top - mainRect.top;
-            const x = relX + rect.width / 2;
-            const y = relY + rect.height / 2;
-
-            originalCardStyles.set(card, {
-                width: card.style.width,
-                height: card.style.height,
-                left: card.style.left,
-                top: card.style.top,
-                visibility: card.style.visibility,
-                transform: card.style.transform
-            });
-
-            const body = Bodies.rectangle(x, y, rect.width, rect.height, {
-                restitution: 0.6,
-                friction: 0.1,
-                frictionAir: 0.02,
-                density: 0.001
-            });
-
-            Matter.Body.applyForce(body, body.position, {
-                x: (Math.random() - 0.5) * 0.08,
-                y: (Math.random() - 0.5) * 0.08
-            });
-
-            Composite.add(world, body);
-            bodiesMap.set(card, body);
-
-            canvasContainer.appendChild(card);
-
-            card.style.width = rect.width + 'px';
-            card.style.height = rect.height + 'px';
-            card.style.left = (-rect.width/2) + 'px'; 
-            card.style.top = (-rect.height/2) + 'px';
-            card.classList.add('gravity-active');
-        });
-
-        mouse = Mouse.create(renderMatter.canvas);
-        mouseConstraint = MouseConstraint.create(engine, {
-            mouse: mouse,
-            constraint: {
-                stiffness: 0.2,
-                angularStiffness: 0.5,
-                render: { visible: false }
-            }
-        });
-        
-        Composite.add(world, mouseConstraint);
-        renderMatter.mouse = mouse;
-
-        mouse.element.removeEventListener("mousewheel", mouse.mousewheel);
-        mouse.element.removeEventListener("DOMMouseScroll", mouse.mousewheel);
-
-        Render.run(renderMatter);
-        runner = Runner.create();
-        Runner.run(runner, engine);
-
-        Matter.Events.on(engine, 'afterUpdate', () => {
-            for (let [card, body] of bodiesMap.entries()) {
-                card.style.transform = `translate(${body.position.x}px, ${body.position.y}px) rotate(${body.angle}rad)`;
-            }
-        });
-    }
-
-    function stopGravity() {
-        gravityActive = false;
-        document.body.classList.remove('gravity-master');
-        DOM.navGravity.innerHTML = '<i class="ph ph-planet text-xl"></i> Modo Anti-Gravity';
-        DOM.navGravity.classList.remove('bg-white', 'text-textMain', 'shadow-atmospheric');
-        DOM.navGravity.classList.add('text-textMain/60');
-        
-        if (DOM.navGravityMobile) {
-            DOM.navGravityMobile.innerHTML = '<i class="ph ph-planet text-xl"></i>';
-        }
-
-        if (runner) Matter.Runner.stop(runner);
-        if (renderMatter) {
-            Matter.Render.stop(renderMatter);
-            renderMatter.canvas.remove();
-        }
-        if (engine) {
-            Matter.World.clear(engine.world);
-            Matter.Engine.clear(engine);
-        }
-
-        const wrapper = document.getElementById('gravity-canvas-wrapper');
-        
-        bodiesMap.forEach((body, card) => {
-            card.classList.remove('gravity-active');
-            const orig = originalCardStyles.get(card);
-            card.style.width = orig.width;
-            card.style.height = orig.height;
-            card.style.left = orig.left;
-            card.style.top = orig.top;
-            card.style.visibility = orig.visibility;
-            card.style.transform = orig.transform;
-            DOM.agendaList.appendChild(card);
-        });
-
-        if (wrapper) wrapper.remove();
-        bodiesMap.clear();
-        originalCardStyles.clear();
-        
-        render(); // Force re-render to ensure pristine state
-    }
-
     // ---- Live Clock & Auto-Scroll ----
     const liveClockEl = document.getElementById('liveClock');
     let lastScrolledTimeStr = '';
@@ -979,7 +1215,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const tzOffset = now.getTimezoneOffset() * 60000;
         const localISOTime = (new Date(now.getTime() - tzOffset)).toISOString().slice(0, 10);
         
-        if (fDataVal !== localISOTime || gravityActive) return;
+        if (fDataVal !== localISOTime) return;
         
         if (timeStr !== lastScrolledTimeStr) {
             lastScrolledTimeStr = timeStr;
@@ -1058,4 +1294,10 @@ document.addEventListener('DOMContentLoaded', () => {
             loadMonitors();
         }
     });
+
+    if (location.protocol !== 'file:' && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations()
+            .then((registrations) => registrations.forEach((registration) => registration.unregister()))
+            .catch((error) => console.warn('Service worker indisponível:', error));
+    }
 });

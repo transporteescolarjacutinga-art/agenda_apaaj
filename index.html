@@ -33,6 +33,7 @@
                         specYellow: '#f59e0b',
                         specGreen: '#10b981',
                         specPurple: '#8b5cf6',
+                        specOrange: '#f97316',
                     },
                     fontFamily: {
                         sans: ['Inter', 'sans-serif'],
@@ -115,9 +116,12 @@
             </div>
             
             <div class="flex flex-wrap sm:flex-nowrap gap-2 sm:gap-4 w-full sm:flex-1 overflow-x-auto custom-scrollbar pb-2 sm:pb-0">
-                <div class="relative flex-1 sm:flex-none min-w-[160px] sm:min-w-[180px]">
-                    <i class="ph ph-calendar-blank absolute left-3 top-1/2 -translate-y-1/2 text-textMain/50 z-10 pointer-events-none"></i>
-                    <input type="date" id="filterDataRef" class="w-full bg-white pl-9 pr-3 py-2 sm:py-3 rounded-xl text-[0.8rem] sm:text-sm font-medium outline-none shadow-atmospheric text-textMain cursor-pointer">
+                <div class="relative flex-1 sm:flex-none flex items-center bg-white rounded-xl shadow-atmospheric p-1 sm:min-w-[200px]">
+                    <button id="btnPrevDay" class="w-8 h-8 rounded-lg hover:bg-surface flex items-center justify-center text-textMain/50 hover:text-specBlue transition-colors"><i class="ph ph-caret-left font-bold"></i></button>
+                    <div class="relative flex-1">
+                        <input type="date" id="filterDataRef" class="w-full bg-transparent px-2 py-1.5 sm:py-2 text-[0.8rem] sm:text-sm font-bold text-center outline-none text-textMain cursor-pointer uppercase">
+                    </div>
+                    <button id="btnNextDay" class="w-8 h-8 rounded-lg hover:bg-surface flex items-center justify-center text-textMain/50 hover:text-specBlue transition-colors"><i class="ph ph-caret-right font-bold"></i></button>
                 </div>
                 <div class="relative flex-1 sm:flex-none min-w-[160px] sm:min-w-[200px]">
                     <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-textMain/50 z-10 pointer-events-none"></i>
@@ -134,6 +138,9 @@
                 <select id="filterEscola" class="bg-white px-3 sm:px-4 py-2 sm:py-3 rounded-xl text-sm font-medium outline-none shadow-atmospheric text-textMain cursor-pointer flex-1 sm:flex-none sm:min-w-[160px]">
                     <option value="">Instituições</option>
                 </select>
+                <button id="btnClearFilters" class="hidden shrink-0 w-9 h-9 sm:w-[46px] sm:h-[46px] bg-specRed/10 text-specRed rounded-xl flex items-center justify-center hover:bg-specRed hover:text-white transition-colors" title="Limpar filtros">
+                    <i class="ph ph-funnel-x text-lg"></i>
+                </button>
             </div>
             
             <div class="hidden sm:block text-sm font-bold text-textMain px-4 py-2 bg-textMain/5 rounded-lg shrink-0">
@@ -141,9 +148,71 @@
             </div>
         </header>
 
+        <!-- Dashboard -->
+        <section id="dashboardPanel" class="bg-background px-4 md:px-8 pt-3 pb-1.5 shrink-0 relative">
+            <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2 sm:gap-3">
+                <!-- Card Total -->
+                <button type="button" id="dashTotalCard" class="dashboard-card col-span-1 bg-white rounded-xl p-2.5 text-left shadow-atmospheric hover:shadow-atmospheric-hover transition-all">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-[0.6rem] font-bold text-textMain/45 uppercase tracking-widest leading-tight">Atendimentos do dia</span>
+                        <i class="ph ph-calendar-check text-lg text-specBlue shrink-0"></i>
+                    </div>
+                    <div class="mt-0.5 font-display font-extrabold text-xl text-textMain" id="dashTotal">0</div>
+                    <div class="text-[0.62rem] font-semibold text-textMain/50" id="dashDateLabel">Hoje</div>
+                </button>
+
+                <!-- Card Manhã -->
+                <button type="button" id="dashMorningCard" class="dashboard-card bg-white rounded-xl p-2.5 text-left shadow-atmospheric hover:shadow-atmospheric-hover transition-all">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-[0.6rem] font-bold text-textMain/45 uppercase tracking-widest leading-tight">Manhã</span>
+                        <i class="ph ph-sun-horizon text-lg text-specBlue shrink-0"></i>
+                    </div>
+                    <div class="mt-0.5 font-display font-extrabold text-xl text-textMain" id="dashMorning">0</div>
+                    <div class="text-[0.62rem] font-semibold text-textMain/50">Clique para filtrar</div>
+                </button>
+
+                <!-- Card Tarde -->
+                <button type="button" id="dashAfternoonCard" class="dashboard-card bg-white rounded-xl p-2.5 text-left shadow-atmospheric hover:shadow-atmospheric-hover transition-all">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-[0.6rem] font-bold text-textMain/45 uppercase tracking-widest leading-tight">Tarde</span>
+                        <i class="ph ph-sun text-lg text-specYellow shrink-0"></i>
+                    </div>
+                    <div class="mt-0.5 font-display font-extrabold text-xl text-textMain" id="dashAfternoon">0</div>
+                    <div class="text-[0.62rem] font-semibold text-textMain/50">Clique para filtrar</div>
+                </button>
+
+                <!-- Card Escolas -->
+                <div class="dashboard-card group col-span-2 md:col-span-1 bg-white rounded-xl p-2.5 shadow-atmospheric cursor-default">
+                    <div class="flex justify-between items-center mb-1">
+                        <div>
+                            <span class="text-[0.6rem] font-bold text-textMain/40 tracking-wider uppercase">Por Instituição</span>
+                            <span class="ml-1.5 text-[0.6rem] font-bold text-specPurple bg-specPurple/10 px-1.5 py-0.5 rounded-full" id="dashSchoolsCount">0</span>
+                        </div>
+                        <i class="ph ph-buildings text-lg text-specPurple/60 group-hover:text-specPurple transition-colors shrink-0"></i>
+                    </div>
+                    <div id="dashSchools" class="flex flex-col gap-1 max-h-[96px] overflow-y-auto custom-scrollbar pr-0.5">
+                        <div class="text-xs font-semibold text-textMain/45">Sem dados</div>
+                    </div>
+                </div>
+
+                <!-- Card Monitoras -->
+                <div class="dashboard-card group col-span-2 md:col-span-1 bg-white rounded-xl p-2.5 shadow-atmospheric cursor-default">
+                    <div class="flex justify-between items-center mb-1">
+                        <div>
+                            <span class="text-[0.6rem] font-bold text-textMain/40 tracking-wider uppercase">Por Monitora</span>
+                            <span class="ml-1.5 text-[0.6rem] font-bold text-specOrange bg-specOrange/10 px-1.5 py-0.5 rounded-full" id="dashMonitorsCount">0</span>
+                        </div>
+                        <i class="ph ph-users text-lg text-specOrange/60 group-hover:text-specOrange transition-colors shrink-0"></i>
+                    </div>
+                    <div id="dashMonitors" class="flex flex-col gap-1 max-h-[96px] overflow-y-auto custom-scrollbar pr-0.5">
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- Card List Area -->
-        <div class="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-10 pb-20 custom-scrollbar relative z-20" id="agendaBoard">
-            <div class="max-w-4xl mx-auto flex flex-col gap-3" id="agendaList">
+        <div class="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:px-8 sm:py-4 pb-20 custom-scrollbar relative z-20" id="agendaBoard">
+            <div class="max-w-5xl mx-auto flex flex-col gap-2" id="agendaList">
                 <!-- Cards injected here via JS -->
             </div>
             
@@ -296,26 +365,23 @@
         </div>
     </div>
 
-    <div id="confirmModalOverlay" class="fixed inset-0 bg-textMain/20 backdrop-blur-md z-[100] opacity-0 pointer-events-none transition-all duration-300 flex items-center justify-center p-4">
-        <div id="confirmModal" class="bg-white w-full max-w-sm rounded-[2rem] shadow-atmospheric p-6 sm:p-8 transform scale-90 opacity-0 transition-all duration-300">
-            <div class="flex flex-col items-center text-center gap-4">
-                <div id="confirmModalIcon" class="w-16 h-16 rounded-2xl bg-specBlue/10 flex items-center justify-center text-specBlue mb-2">
-                    <i class="ph ph-question text-3xl"></i>
-                </div>
-                <h3 id="confirmModalTitle" class="font-display font-bold text-xl text-textMain">Confirmar Ação</h3>
-                <p id="confirmModalMessage" class="text-sm text-textMain/60 leading-relaxed">Deseja realmente realizar esta alteração?</p>
-                
-                <div class="flex gap-3 w-full mt-4">
-                    <button id="btnConfirmCancel" class="flex-1 py-3.5 rounded-xl bg-surface text-textMain font-bold text-sm hover:bg-background transition-colors">
-                        Cancelar
-                    </button>
-                    <button id="btnConfirmOk" class="flex-1 py-3.5 rounded-xl bg-textMain text-white font-bold text-sm hover:bg-black shadow-lg transition-all transform hover:-translate-y-1">
-                        Confirmar
-                    </button>
-                </div>
+    <div id="confirmModalOverlay" class="fixed inset-0 bg-textMain/20 backdrop-blur-[5px] z-[80] opacity-0 pointer-events-none transition-opacity duration-300 flex items-center justify-center px-4">
+        <div id="confirmModal" class="bg-white rounded-3xl p-6 sm:p-8 w-full max-w-sm shadow-[0_20px_60px_rgba(45,51,53,0.1)] transform scale-95 transition-transform duration-300 flex flex-col items-center text-center relative pointer-events-auto">
+            <div id="confirmModalIcon" class="w-16 h-16 rounded-2xl flex items-center justify-center mb-2 bg-specBlue/10 text-specBlue">
+                <i class="ph ph-question text-3xl"></i>
+            </div>
+            <h3 id="confirmModalTitle" class="font-display font-bold text-xl text-textMain mb-2">Confirmar</h3>
+            <p id="confirmModalMessage" class="text-sm text-textMain/60 font-medium mb-6">Tem certeza que deseja realizar esta ação?</p>
+            
+            <div class="flex w-full gap-3">
+                <button id="btnConfirmCancel" class="flex-1 py-3.5 rounded-xl font-bold text-sm bg-surface text-textMain/60 hover:bg-background hover:text-textMain transition-colors">Cancelar</button>
+                <button id="btnConfirmOk" class="flex-1 py-3.5 rounded-xl font-bold text-sm bg-textMain text-white hover:bg-black transition-colors shadow-atmospheric">Confirmar</button>
             </div>
         </div>
     </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="fixed top-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none"></div>
 
     <script src="app.js?v=2"></script>
 

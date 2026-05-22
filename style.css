@@ -9,6 +9,76 @@ input, select, textarea, button {
     border: none !important;
 }
 
+.dashboard-card {
+    min-height: 76px;
+    cursor: pointer;
+}
+
+.dashboard-card.active {
+    outline: 2px solid rgba(59, 130, 246, 0.35);
+    outline-offset: -2px;
+    background: linear-gradient(135deg, #ffffff 0%, #f6f9ff 100%);
+}
+
+.dashboard-school-row {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem;
+    padding: 0.35rem 0.5rem;
+    border-radius: 7px;
+    background: #f8f9fa;
+    border: 1px solid rgba(45, 51, 53, 0.05);
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #2d3335;
+    text-align: left;
+    transition: all 0.2s ease;
+}
+
+.dashboard-school-row:hover,
+.dashboard-school-row.active {
+    background: rgba(139, 92, 246, 0.08);
+    border-color: rgba(139, 92, 246, 0.3);
+    color: #6d45ce;
+}
+
+.dashboard-school-row span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+}
+
+.dashboard-school-row strong {
+    flex-shrink: 0;
+    background: rgba(45, 51, 53, 0.06);
+    padding: 0.1rem 0.35rem;
+    border-radius: 5px;
+    font-size: 0.65rem;
+}
+
+.dashboard-school-row.active strong {
+    background: rgba(139, 92, 246, 0.15);
+}
+
+/* Variante para monitoras: hover e active em laranja */
+.dashboard-school-row.monitor-row:hover,
+.dashboard-school-row.monitor-row.active {
+    background: rgba(249, 115, 22, 0.08);
+    border-color: rgba(249, 115, 22, 0.3);
+    color: #c2500a;
+}
+.dashboard-school-row.monitor-row.active strong {
+    background: rgba(249, 115, 22, 0.15);
+}
+
+.dashboard-school-row:disabled {
+    cursor: default;
+    opacity: 1;
+}
+
 /* Custom Scrollbar */
 .custom-scrollbar::-webkit-scrollbar {
     width: 6px;
@@ -27,30 +97,30 @@ input, select, textarea, button {
 /* Agenda Card Styles */
 .agenda-card {
     position: relative;
-    background-color: var(--card); /* #ffffff in TW */
-    border-radius: 16px;
-    padding: 1rem 1.25rem;
-    box-shadow: 0 10px 20px rgba(45, 51, 53, 0.04);
+    background-color: #ffffff;
+    border-radius: 12px;
+    padding: 0.7rem 0.9rem 0.7rem 1rem;
+    box-shadow: 0 8px 16px rgba(45, 51, 53, 0.035);
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 0.45rem;
     transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.4s ease;
     user-select: none;
     isolation: isolate;
 }
 
 .agenda-card:hover {
-    transform: translateY(-4px) scale(1.005);
-    box-shadow: 0 30px 60px rgba(45, 51, 53, 0.08);
+    transform: translateY(-2px);
+    box-shadow: 0 20px 40px rgba(45, 51, 53, 0.07);
 }
 
 /* Turno Pill Component */
 .turno-pill {
     position: absolute;
-    left: 8px;
-    top: 1rem;
-    bottom: 1rem;
-    width: 5px;
+    left: 6px;
+    top: 0.7rem;
+    bottom: 0.7rem;
+    width: 4px;
     border-radius: 5px;
     z-index: 10;
 }
@@ -60,20 +130,20 @@ input, select, textarea, button {
 /* Structural Details */
 .card-actions {
     display: flex;
-    gap: 0.4rem;
+    gap: 0.3rem;
 }
 
 .btn-icon {
-    width: 36px;
-    height: 36px;
-    border-radius: 12px;
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
     background: #f1f4f5;
     color: #2d3335;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    font-size: 1.1rem;
+    font-size: 1rem;
     transition: all 0.2s;
 }
 .btn-icon:hover {
@@ -86,20 +156,20 @@ input, select, textarea, button {
 
 .patient-name {
     font-family: 'Manrope', sans-serif;
-    font-size: 1.15rem;
+    font-size: 1rem;
     font-weight: 800;
     color: #2d3335;
     line-height: 1.1;
-    margin-top: 0.25rem;
+    margin-top: 0.05rem;
 }
 
 .card-details {
     display: flex;
     flex-wrap: wrap;
-    gap: 1rem;
+    gap: 0.55rem 0.85rem;
     background-color: #f8f9fa; /* Background shift for hierarchy */
-    padding: 0.75rem 1rem;
-    border-radius: 12px;
+    padding: 0.5rem 0.65rem;
+    border-radius: 9px;
 }
 
 .detail-item {
@@ -108,35 +178,35 @@ input, select, textarea, button {
     gap: 0.15rem;
 }
 .detail-label {
-    font-size: 0.6rem;
+    font-size: 0.55rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     font-weight: 800;
     color: rgba(45, 51, 53, 0.4);
 }
 .detail-value {
-    font-size: 0.8rem;
+    font-size: 0.72rem;
     font-weight: 700;
     color: #2d3335;
     display: flex;
     align-items: center;
-    gap: 0.35rem;
+    gap: 0.25rem;
 }
 
 .whatsapp-link {
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.3rem;
     background: #25D366;
     color: #ffffff;
-    padding: 0.5rem 1rem;
-    border-radius: 10px;
-    font-size: 0.8rem;
+    padding: 0.38rem 0.7rem;
+    border-radius: 8px;
+    font-size: 0.72rem;
     font-weight: 700;
     text-decoration: none;
     box-shadow: 0 4px 12px rgba(37, 211, 102, 0.2);
     transition: transform 0.2s, box-shadow 0.2s;
-    pointer-events: auto; /* Required for gravity mode */
+    pointer-events: auto;
 }
 .whatsapp-link:hover {
     transform: translateY(-2px);
@@ -144,9 +214,9 @@ input, select, textarea, button {
 }
 
 .badge {
-    padding: 0.35rem 0.75rem;
-    border-radius: 8px;
-    font-size: 0.75rem;
+    padding: 0.25rem 0.55rem;
+    border-radius: 7px;
+    font-size: 0.68rem;
     font-weight: 700;
     background: #f1f4f5;
     color: #2d3335;
@@ -231,3 +301,18 @@ body.viewer-mode .admin-only {
     transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
 }
 
+@media print {
+    body { background: white; }
+    body * { visibility: hidden; }
+    #agendaBoard, #agendaBoard * { visibility: visible; }
+    #agendaBoard { position: absolute; left: 0; top: 0; width: 100%; height: auto; overflow: visible; padding: 0; }
+    #agendaList { gap: 0.5rem; max-width: 100%; display: block; }
+    .agenda-card { box-shadow: none !important; border: 1px solid #ddd; padding: 0.5rem 1rem; break-inside: avoid; margin-bottom: 0.5rem; opacity: 1 !important; filter: none !important; }
+    .agenda-card[data-cancelled="true"] { display: none !important; }
+    .turno-pill, .admin-only, .card-actions, select, button, .whatsapp-link, .badge, label { display: none !important; }
+    header, aside, #dashboardPanel, #btnNewAppointmentMobile, #toastContainer, #drawer, #drawerOverlay { display: none !important; }
+    .patient-name { font-size: 16px; margin: 0; }
+    .detail-item { font-size: 12px; margin-bottom: 2px; }
+    .card-header { margin-bottom: 4px; padding-bottom: 0; border: none; }
+    .card-details { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 0.2rem; background: none; padding: 0; border: none; }
+}
