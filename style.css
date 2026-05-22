@@ -229,36 +229,150 @@ body.viewer-mode .admin-only {
 
 /* --- Extreme Mobile Compression --- */
 @media (max-width: 640px) {
+    html,
+    body {
+        height: auto !important;
+        min-height: 100dvh !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+    }
+
+    body {
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    aside {
+        padding: 0.75rem 1rem !important;
+        min-height: auto !important;
+    }
+
+    aside img {
+        width: 4.5rem !important;
+    }
+
+    aside h1 {
+        font-size: 0.95rem !important;
+        line-height: 1.05 !important;
+    }
+
+    #mainContainer {
+        height: auto !important;
+        min-height: 0 !important;
+        overflow: visible !important;
+        flex: none !important;
+    }
+
+    #mainContainer > header {
+        padding: 0.75rem 1rem !important;
+        gap: 0.75rem !important;
+        min-height: 0 !important;
+    }
+
+    #mainContainer > header > div:nth-child(2) {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 0.5rem !important;
+        overflow: visible !important;
+        padding-bottom: 0 !important;
+    }
+
+    #mainContainer > header > div:nth-child(2) > * {
+        min-width: 0 !important;
+        width: 100% !important;
+    }
+
+    #filterEscola {
+        grid-column: 1 / -1;
+    }
+
+    #dashboardPanel {
+        padding: 0.55rem 1rem 0.35rem !important;
+    }
+
+    #dashboardPanel > .grid {
+        display: grid !important;
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+        gap: 0.45rem !important;
+    }
+
+    #dashboardPanel .dashboard-card {
+        min-height: 58px;
+        padding: 0.55rem !important;
+        border-radius: 10px !important;
+    }
+
+    #dashboardPanel .dashboard-card:nth-child(n+4) {
+        display: none !important;
+    }
+
+    #dashboardPanel .dashboard-card span {
+        font-size: 0.5rem !important;
+        letter-spacing: 0.08em !important;
+    }
+
+    #dashboardPanel .dashboard-card [id^="dash"] {
+        font-size: 1.25rem !important;
+        line-height: 1.05 !important;
+    }
+
+    #dashboardPanel .dashboard-card i {
+        font-size: 1rem !important;
+    }
+
+    #dashDateLabel,
+    #dashboardPanel .dashboard-card .text-\[0\.62rem\] {
+        display: none !important;
+    }
+
+    #agendaBoard {
+        flex: none !important;
+        height: auto !important;
+        min-height: 0 !important;
+        overflow: visible !important;
+        padding: 0.6rem 1rem 5.5rem !important;
+    }
+
+    #agendaList {
+        gap: 0.55rem !important;
+        max-width: none !important;
+    }
+
     .agenda-card {
-        padding: 0.75rem 0.85rem;
-        gap: 0.5rem;
-        border-radius: 12px;
+        padding: 0.65rem 0.75rem 0.65rem 0.9rem;
+        gap: 0.4rem;
+        border-radius: 10px;
     }
     .turno-pill {
         left: 4px;
-        top: 0.75rem;
-        bottom: 0.75rem;
+        top: 0.65rem;
+        bottom: 0.65rem;
         width: 4px;
     }
     .patient-name {
-        font-size: 1.05rem;
-        margin-top: 0.1rem;
+        font-size: 0.98rem;
+        margin-top: 0;
     }
     .card-details {
-        padding: 0.5rem 0.65rem;
-        gap: 0.5rem;
+        padding: 0.45rem 0.55rem;
+        gap: 0.4rem 0.55rem;
         border-radius: 8px;
     }
     .detail-item {
         gap: 0.1rem;
     }
     .detail-value {
-        font-size: 0.7rem;
+        font-size: 0.68rem;
     }
     .whatsapp-link {
-        padding: 0.4rem 0.8rem;
-        font-size: 0.75rem;
+        padding: 0.35rem 0.6rem;
+        font-size: 0.68rem;
         border-radius: 8px;
+    }
+
+    .badge {
+        padding: 0.22rem 0.45rem;
+        font-size: 0.64rem;
     }
 }
 
