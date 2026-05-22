@@ -243,17 +243,27 @@ body.viewer-mode .admin-only {
     }
 
     aside {
-        padding: 0.75rem 1rem !important;
+        padding: 0.55rem 0.85rem !important;
         min-height: auto !important;
     }
 
     aside img {
-        width: 4.5rem !important;
+        width: 3.5rem !important;
     }
 
     aside h1 {
-        font-size: 0.95rem !important;
+        font-size: 0.82rem !important;
         line-height: 1.05 !important;
+    }
+
+    aside p {
+        font-size: 0.5rem !important;
+        margin-top: 0.1rem !important;
+        letter-spacing: 0.16em !important;
+    }
+
+    aside > div:first-child {
+        gap: 0.65rem !important;
     }
 
     #mainContainer {
@@ -264,15 +274,28 @@ body.viewer-mode .admin-only {
     }
 
     #mainContainer > header {
-        padding: 0.75rem 1rem !important;
-        gap: 0.75rem !important;
+        padding: 0.5rem 0.85rem !important;
+        gap: 0.45rem !important;
         min-height: 0 !important;
+    }
+
+    #mainContainer > header > div:first-child {
+        margin-right: 0 !important;
+    }
+
+    #liveClock {
+        font-size: 1.35rem !important;
+        line-height: 1 !important;
+    }
+
+    #appointmentCountMobile {
+        font-size: 0.75rem !important;
     }
 
     #mainContainer > header > div:nth-child(2) {
         display: grid !important;
         grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-        gap: 0.5rem !important;
+        gap: 0.35rem !important;
         overflow: visible !important;
         padding-bottom: 0 !important;
     }
@@ -287,20 +310,37 @@ body.viewer-mode .admin-only {
         display: none !important;
     }
 
+    #filterDataRef,
+    #filterPaciente,
+    #filterProfissional,
+    #mainContainer > header select {
+        min-height: 2.1rem !important;
+        padding-top: 0.35rem !important;
+        padding-bottom: 0.35rem !important;
+        font-size: 0.78rem !important;
+        border-radius: 10px !important;
+    }
+
+    #btnPrevDay,
+    #btnNextDay {
+        width: 1.8rem !important;
+        height: 1.8rem !important;
+    }
+
     #dashboardPanel {
-        padding: 0.5rem 1rem 0.35rem !important;
+        padding: 0.4rem 0.85rem 0.3rem !important;
     }
 
     #dashboardPanel > .grid {
         display: grid !important;
         grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-        gap: 0.4rem !important;
+        gap: 0.35rem !important;
     }
 
     #dashboardPanel .dashboard-card {
-        min-height: 54px;
-        padding: 0.5rem !important;
-        border-radius: 9px !important;
+        min-height: 48px;
+        padding: 0.42rem !important;
+        border-radius: 8px !important;
     }
 
     #dashboardPanel .dashboard-card:nth-child(5) {
@@ -313,33 +353,37 @@ body.viewer-mode .admin-only {
     }
 
     #dashboardPanel .dashboard-card span {
-        font-size: 0.5rem !important;
-        letter-spacing: 0.08em !important;
+        font-size: 0.46rem !important;
+        letter-spacing: 0.06em !important;
     }
 
     #dashboardPanel .dashboard-card [id^="dash"] {
-        font-size: 1.25rem !important;
+        font-size: 1.05rem !important;
         line-height: 1.05 !important;
     }
 
     #dashboardPanel .dashboard-card i {
-        font-size: 1rem !important;
+        font-size: 0.9rem !important;
     }
 
     #dashboardPanel #dashSchools {
-        max-height: 68px !important;
-        gap: 0.3rem !important;
+        max-height: none !important;
+        overflow: visible !important;
+        gap: 0.22rem !important;
+        padding-right: 0 !important;
+        touch-action: manipulation;
     }
 
     #dashboardPanel .dashboard-school-row {
-        padding: 0.3rem 0.45rem !important;
-        font-size: 0.64rem !important;
-        border-radius: 7px !important;
+        padding: 0.22rem 0.38rem !important;
+        font-size: 0.58rem !important;
+        border-radius: 6px !important;
+        min-height: 1.55rem !important;
     }
 
     #dashboardPanel .dashboard-school-row strong {
-        font-size: 0.6rem !important;
-        padding: 0.08rem 0.3rem !important;
+        font-size: 0.55rem !important;
+        padding: 0.05rem 0.25rem !important;
     }
 
     #dashDateLabel,
@@ -352,49 +396,62 @@ body.viewer-mode .admin-only {
         height: auto !important;
         min-height: 0 !important;
         overflow: visible !important;
-        padding: 0.6rem 1rem 5.5rem !important;
+        padding: 0.45rem 0.85rem 5rem !important;
     }
 
     #agendaList {
-        gap: 0.55rem !important;
+        gap: 0.42rem !important;
         max-width: none !important;
     }
 
     .agenda-card {
-        padding: 0.65rem 0.75rem 0.65rem 0.9rem;
-        gap: 0.4rem;
-        border-radius: 10px;
+        padding: 0.48rem 0.6rem 0.52rem 0.78rem;
+        gap: 0.28rem;
+        border-radius: 8px;
     }
     .turno-pill {
         left: 4px;
-        top: 0.65rem;
-        bottom: 0.65rem;
-        width: 4px;
+        top: 0.5rem;
+        bottom: 0.5rem;
+        width: 3px;
     }
     .patient-name {
-        font-size: 0.98rem;
+        font-size: 0.86rem;
         margin-top: 0;
     }
     .card-details {
-        padding: 0.45rem 0.55rem;
-        gap: 0.4rem 0.55rem;
-        border-radius: 8px;
+        padding: 0.35rem 0.45rem;
+        gap: 0.3rem 0.45rem;
+        border-radius: 7px;
     }
     .detail-item {
-        gap: 0.1rem;
+        gap: 0.05rem;
+    }
+    .detail-label {
+        font-size: 0.48rem;
     }
     .detail-value {
-        font-size: 0.68rem;
+        font-size: 0.6rem;
     }
     .whatsapp-link {
-        padding: 0.35rem 0.6rem;
-        font-size: 0.68rem;
-        border-radius: 8px;
+        padding: 0.3rem 0.48rem;
+        font-size: 0.6rem;
+        border-radius: 7px;
     }
 
     .badge {
-        padding: 0.22rem 0.45rem;
-        font-size: 0.64rem;
+        padding: 0.18rem 0.36rem;
+        font-size: 0.58rem;
+    }
+
+    .btn-icon {
+        width: 1.6rem;
+        height: 1.6rem;
+        border-radius: 7px;
+    }
+
+    .card-header {
+        gap: 0.35rem !important;
     }
 }
 

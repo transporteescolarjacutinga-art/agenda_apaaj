@@ -708,8 +708,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (dashSchoolsEl) {
             dashSchoolsEl.innerHTML = '';
             const schools = Array.from(schoolCounts.entries())
-                .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-                .slice(0, 8);
+                .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
 
             if (schools.length === 0) {
                 dashSchoolsEl.innerHTML = '<div class="text-xs font-semibold text-textMain/45">Sem dados para exibir</div>';
@@ -867,10 +866,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const monitorOptions = MONITORAS.map(m => `<option value="${escapeHtml(m)}" ${todayMonitor === m ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('');
 
                 actionButtons = `
-                <div class="mt-1.5 pt-2 border-t border-textMain/5 flex flex-col gap-2 pointer-events-auto relative z-20">
+                <div class="mt-1 pt-1.5 border-t border-textMain/5 flex flex-col gap-1.5 pointer-events-auto relative z-20">
                     <div class="flex items-center gap-1.5">
                         <label class="text-[0.6rem] font-bold text-textMain/40 uppercase tracking-widest whitespace-nowrap">Monitora:</label>
-                        <select class="flex-1 bg-surface border border-textMain/10 rounded-lg px-2 py-1 text-xs font-medium outline-none" onchange="window.updateDailyMonitor('${itemIdJs}', '${dateRef}', this.value)">
+                        <select class="flex-1 bg-surface border border-textMain/10 rounded-lg px-2 py-1 text-[0.7rem] font-medium outline-none" onchange="window.updateDailyMonitor('${itemIdJs}', '${dateRef}', this.value)">
                             <option value="">Selecionar...</option>
                             ${monitorOptions}
                         </select>
@@ -895,14 +894,14 @@ document.addEventListener('DOMContentLoaded', () => {
             card.dataset.fullydone = fullyDone ? 'true' : 'false';
             card.innerHTML = `
                 <div class="turno-pill ${pillClass}"></div>
-                <div class="card-header flex items-start justify-between gap-3">
+                <div class="card-header flex items-start justify-between gap-2">
                     <div>
                         <div class="flex items-center gap-1.5 mb-0.5">
-                            <div class="font-display font-bold text-specBlue text-[0.65rem] bg-specBlue/10 px-1.5 py-0.5 rounded-md">
+                            <div class="font-display font-bold text-specBlue text-[0.6rem] bg-specBlue/10 px-1.5 py-0.5 rounded-md">
                                 <i class="ph ph-clock mr-1"></i>
                                 ${inicioHtml} às ${terminoHtml}
                             </div>
-                            <span class="text-[0.6rem] font-bold text-textMain/50 uppercase tracking-widest">${turnoHtml}</span>
+                            <span class="text-[0.55rem] font-bold text-textMain/50 uppercase tracking-widest">${turnoHtml}</span>
                         </div>
                         <h3 class="patient-name">${patientNameHtml}</h3>
                     </div>
