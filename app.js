@@ -545,14 +545,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (DOM.dashMorningCard) {
         DOM.dashMorningCard.addEventListener('click', () => {
-            if (DOM.fTurno) DOM.fTurno.value = 'Manhã';
+            if (DOM.fTurno) DOM.fTurno.value = DOM.fTurno.value === 'Manhã' ? '' : 'Manhã';
             render();
         });
     }
 
     if (DOM.dashAfternoonCard) {
         DOM.dashAfternoonCard.addEventListener('click', () => {
-            if (DOM.fTurno) DOM.fTurno.value = 'Tarde';
+            if (DOM.fTurno) DOM.fTurno.value = DOM.fTurno.value === 'Tarde' ? '' : 'Tarde';
             render();
         });
     }

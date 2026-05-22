@@ -282,28 +282,34 @@ body.viewer-mode .admin-only {
         width: 100% !important;
     }
 
+    #filterTurno,
     #filterEscola {
-        grid-column: 1 / -1;
+        display: none !important;
     }
 
     #dashboardPanel {
-        padding: 0.55rem 1rem 0.35rem !important;
+        padding: 0.5rem 1rem 0.35rem !important;
     }
 
     #dashboardPanel > .grid {
         display: grid !important;
         grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-        gap: 0.45rem !important;
+        gap: 0.4rem !important;
     }
 
     #dashboardPanel .dashboard-card {
-        min-height: 58px;
-        padding: 0.55rem !important;
-        border-radius: 10px !important;
+        min-height: 54px;
+        padding: 0.5rem !important;
+        border-radius: 9px !important;
     }
 
-    #dashboardPanel .dashboard-card:nth-child(n+4) {
+    #dashboardPanel .dashboard-card:nth-child(5) {
         display: none !important;
+    }
+
+    #dashboardPanel .dashboard-card:nth-child(4) {
+        grid-column: 1 / -1;
+        min-height: 0;
     }
 
     #dashboardPanel .dashboard-card span {
@@ -318,6 +324,22 @@ body.viewer-mode .admin-only {
 
     #dashboardPanel .dashboard-card i {
         font-size: 1rem !important;
+    }
+
+    #dashboardPanel #dashSchools {
+        max-height: 68px !important;
+        gap: 0.3rem !important;
+    }
+
+    #dashboardPanel .dashboard-school-row {
+        padding: 0.3rem 0.45rem !important;
+        font-size: 0.64rem !important;
+        border-radius: 7px !important;
+    }
+
+    #dashboardPanel .dashboard-school-row strong {
+        font-size: 0.6rem !important;
+        padding: 0.08rem 0.3rem !important;
     }
 
     #dashDateLabel,
