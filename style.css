@@ -122,7 +122,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 .filters-panel {
     display: grid;
-    grid-template-columns: 220px minmax(180px, 1fr) 170px 130px 170px auto;
+    grid-template-columns: 220px minmax(180px, 1fr) 170px 130px auto;
     gap: 8px;
     min-width: 0;
 }
@@ -151,11 +151,15 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .search-control i { margin-left: 14px; color: var(--muted); }
 .search-control input { box-shadow: none; }
 .clear-filters { min-height: var(--tap); border-radius: 12px; background: #ffe8ee; color: var(--red); padding: 0 14px; font-weight: 800; }
+#filterEscola,
+.summary-card {
+    display: none !important;
+}
 
 .dashboard-panel {
     padding: 12px 18px;
     display: grid;
-    grid-template-columns: repeat(3, minmax(120px, 1fr)) repeat(2, minmax(190px, 1.2fr));
+    grid-template-columns: repeat(3, minmax(120px, 1fr));
     gap: 10px;
 }
 .metric-card, .summary-card {
@@ -212,13 +216,13 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .agenda-card:has(.turno-pill.tarde)::before { background: var(--yellow); }
 .turno-pill { display: none; }
 .card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
-.patient-name { margin: 4px 0 0; font-size: 1.08rem; line-height: 1.18; font-weight: 800; }
+.patient-name { margin: 4px 0 0; font-size: 1.02rem; line-height: 1.18; font-weight: 800; letter-spacing: -.015em; }
 .card-actions { display: flex; gap: 8px; }
 .btn-icon { width: var(--tap); height: var(--tap); border-radius: 12px; background: var(--soft); color: var(--text); }
 .btn-icon.delete { color: var(--red); }
 .card-details { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 10px; border-radius: 14px; background: var(--soft); }
 .detail-label { display: block; margin-bottom: 4px; color: var(--muted); font-size: .62rem; font-weight: 800; text-transform: uppercase; }
-.detail-value { color: var(--text); font-size: .82rem; font-weight: 700; line-height: 1.25; }
+.detail-value { color: var(--text); font-size: .78rem; font-weight: 700; line-height: 1.25; }
 .badge { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; border-radius: 999px; padding: 0 10px; background: #eaf1ff; color: var(--blue); font-weight: 800; font-size: .74rem; }
 .whatsapp-link { min-height: var(--tap); border-radius: 12px; background: #22c55e; color: #fff; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 14px; text-decoration: none; font-weight: 800; }
 
@@ -228,7 +232,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .absence-btn { height: var(--tap); border-radius: 12px; background: #ffe8ee; color: var(--red); padding: 0 14px; font-weight: 800; }
 .absence-btn.active { background: var(--red); color: #fff; }
 .progress-line { display: grid; gap: 8px; }
-.progress-step { min-height: 82px; border-radius: 14px; background: var(--soft) !important; color: var(--blue) !important; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 8px 6px; text-align: center; font-size: .72rem; font-weight: 800; line-height: 1.1; }
+.progress-step { min-height: 76px; border-radius: 999px; background: #f9fbff !important; color: var(--blue) !important; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; padding: 8px 6px; text-align: center; font-size: .68rem; font-weight: 800; line-height: 1.08; box-shadow: inset 0 0 0 1px rgba(37,99,235,.1); }
 .progress-step.bg-specGreen, .progress-step.text-white { background: var(--green) !important; color: #fff !important; }
 .progress-step-icon { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: #fff; color: inherit; }
 .progress-step-label { overflow-wrap: anywhere; }
@@ -293,13 +297,13 @@ button:disabled { opacity: .45; cursor: not-allowed; }
     .date-control, .search-control { min-height: 40px; border-radius: 10px; }
     .date-control input, .search-control input, .filters-panel select { height: 40px; min-height: 40px; border-radius: 10px; font-size: .78rem; box-shadow: 0 4px 12px rgba(20,33,61,.06); }
     .date-control button { width: 40px; height: 40px; }
-    #filterEscola { display: block; grid-column: 1 / -1; color: var(--purple); font-weight: 700; }
+    #filterEscola { display: none !important; }
     .clear-filters { grid-column: 1 / -1; width: 100%; min-height: 38px; border-radius: 10px; font-size: .72rem; }
     .dashboard-panel { grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 7px 8px; gap: 5px; }
-    .metric-card, .summary-card { min-height: 52px; padding: 7px; border-radius: 12px; box-shadow: 0 5px 14px rgba(20,33,61,.06); }
+    .metric-card { min-height: 50px; padding: 7px; border-radius: 12px; box-shadow: 0 5px 14px rgba(20,33,61,.06); }
     .metric-card span, .metric-card small, .summary-title { font-size: .49rem; letter-spacing: .015em; }
     .metric-card strong { font-size: 1rem; margin: 1px 0; }
-    .summary-card { grid-column: 1 / -1; }
+    .summary-card { display: none !important; }
     .summary-list { grid-template-columns: repeat(auto-fit, minmax(116px, 1fr)); max-height: 78px; overflow: auto; gap: 5px; }
     .dashboard-school-row { min-height: 28px; border-radius: 8px; padding: 0 7px; font-size: .54rem; }
     .agenda-board { overflow: visible; padding: 0 7px 72px; }
@@ -308,13 +312,26 @@ button:disabled { opacity: .45; cursor: not-allowed; }
     .agenda-card { padding: 9px 9px 10px 12px; gap: 7px; border-radius: 13px; box-shadow: 0 5px 16px rgba(20,33,61,.075); }
     .agenda-card::before { top: 12px; bottom: 12px; width: 4px; }
     .card-header { gap: 8px; }
-    .patient-name { font-size: .82rem; line-height: 1.12; margin-top: 2px; letter-spacing: -.01em; }
+    .patient-name { font-size: .78rem; line-height: 1.14; margin-top: 2px; letter-spacing: -.01em; }
+    .card-header .font-display {
+        font-size: .62rem !important;
+        line-height: 1 !important;
+        padding: 4px 7px !important;
+        border-radius: 999px !important;
+        display: inline-flex !important;
+        align-items: center;
+        gap: 3px;
+    }
+    .card-header .text-\[0\.55rem\] {
+        font-size: .5rem !important;
+        letter-spacing: .06em !important;
+    }
     .card-actions { gap: 4px; }
     .btn-icon { width: 34px; height: 34px; border-radius: 9px; font-size: .9rem; }
     .card-details { grid-template-columns: 1fr; }
     .card-details { gap: 5px; padding: 7px; border-radius: 10px; }
-    .detail-label { font-size: .46rem; margin-bottom: 1px; letter-spacing: .025em; }
-    .detail-value { font-size: .62rem; line-height: 1.16; }
+    .detail-label { font-size: .43rem; margin-bottom: 1px; letter-spacing: .025em; }
+    .detail-value { font-size: .58rem; line-height: 1.16; }
     .badge { min-height: 26px; font-size: .56rem; padding: 0 7px; }
     .agenda-card > .flex.justify-between, .agenda-card > div.flex.justify-between { flex-direction: column !important; align-items: stretch !important; }
     .whatsapp-link { width: 100%; min-height: 36px; font-size: .63rem; border-radius: 10px; }
@@ -325,8 +342,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
     .daily-monitor-select, .absence-btn { height: 38px; min-height: 38px; border-radius: 10px; font-size: .62rem; }
     .absence-btn { padding: 0 9px; }
     .progress-line { gap: 4px; }
-    .progress-step { min-height: 58px; font-size: .47rem; padding: 5px 2px; border-radius: 9px; gap: 3px; }
-    .progress-step-icon { width: 23px; height: 23px; font-size: .72rem; }
+    .progress-step { min-height: 54px; font-size: .43rem; padding: 5px 2px; border-radius: 999px; gap: 3px; background: #f9fbff !important; }
+    .progress-step-icon { width: 21px; height: 21px; font-size: .66rem; }
     .progress-step-time { font-size: .39rem; }
     .progress-step-label { line-height: 1.05; }
     .drawer { width: 100vw; }
