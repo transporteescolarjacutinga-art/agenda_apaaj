@@ -1750,7 +1750,7 @@
                         <span class="badge"><i class="ph ph-bus text-specGreen"></i> ${trType === 'Entrada' ? 'Somente Entrada' : (fixTextEncoding(trType) === 'Saída' ? 'Somente Saída' : 'Ida e Volta')}</span>
                         ${item.obs ? `<span class="badge bg-specYellow/10 text-specYellow"><i class="ph ph-info"></i> ${obsHtml}</span>` : ''}
                     </div>
-                    ${!isCancelled ? `<a href="${wppLink}" target="_blank" class="whatsapp-link relative z-20 pointer-events-auto"><i class="ph ph-whatsapp-logo text-xl"></i> Contatar</a>` : ''}
+                    ${!isCancelled ? `<a href="${wppLink}" target="_blank" class="whatsapp-link relative z-20 pointer-events-auto" title="Contatar pelo WhatsApp" aria-label="Contatar pelo WhatsApp"><i class="ph ph-whatsapp-logo text-xl"></i></a>` : ''}
                 </div>
                 ${actionButtons}
                 ${auditInfoHtml}
