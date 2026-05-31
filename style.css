@@ -15,6 +15,18 @@ input {
     touch-action: manipulation;
 }
 
+[data-action],
+.daily-monitor-select,
+.dashboard-card,
+.dashboard-school-row,
+.progress-step,
+.absence-btn,
+.btn-icon,
+.whatsapp-link {
+    pointer-events: auto;
+    touch-action: manipulation;
+}
+
 .dashboard-card {
     min-height: 76px;
     cursor: pointer;
@@ -485,7 +497,7 @@ body.viewer-mode .admin-only {
     #dashboardPanel {
         padding: 0.4rem 0.85rem 0.3rem !important;
         position: relative;
-        z-index: 1;
+        z-index: 20;
     }
 
     #dashboardPanel > .grid {
@@ -567,6 +579,8 @@ body.viewer-mode .admin-only {
         min-height: 0 !important;
         overflow: visible !important;
         padding: 0.45rem 0.85rem 5rem !important;
+        position: relative !important;
+        z-index: 1 !important;
     }
 
     #agendaList {
@@ -625,6 +639,9 @@ body.viewer-mode .admin-only {
     .monitor-action-row select {
         min-width: 0 !important;
         width: 100% !important;
+        min-height: 2.5rem !important;
+        font-size: 0.72rem !important;
+        pointer-events: auto !important;
     }
 
     .badge {
@@ -663,6 +680,7 @@ body.viewer-mode .admin-only {
         line-height: 1.05;
         gap: 0.08rem;
         min-width: 0;
+        pointer-events: auto !important;
     }
 
     .progress-step-icon {
@@ -690,6 +708,7 @@ body.viewer-mode .admin-only {
         font-size: 0.58rem;
         white-space: nowrap;
         max-width: 4.8rem;
+        pointer-events: auto !important;
     }
 
     .btn-icon {

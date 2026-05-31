@@ -301,6 +301,25 @@
     const localISOTime = (new Date(Date.now() - tzOffset)).toISOString().slice(0, 10);
     if(DOM.fData) DOM.fData.value = localISOTime;
 
+    let lastUserInteractionAt = 0;
+
+    function markUserInteraction() {
+        lastUserInteractionAt = Date.now();
+    }
+
+    function isBackgroundSyncPaused() {
+        const activeTag = document.activeElement?.tagName;
+        const userRecentlyTouchedUi = Date.now() - lastUserInteractionAt < 12000;
+        const formElementFocused = ['INPUT', 'SELECT', 'TEXTAREA'].includes(activeTag);
+        const confirmationOpen = DOM.confirmModalOverlay?.classList.contains('active');
+        const drawerOpen = DOM.drawer && !DOM.drawer.classList.contains('translate-x-full');
+        return userRecentlyTouchedUi || formElementFocused || confirmationOpen || drawerOpen;
+    }
+
+    ['pointerdown', 'touchstart', 'focusin', 'input', 'change'].forEach(eventName => {
+        document.addEventListener(eventName, markUserInteraction, { capture: true, passive: true });
+    });
+
     // ---- Data Management (Supabase REST API) ----
     const SUPABASE_URL = "https://ymgmlvrbydmxfnkeopra.supabase.co";
     const SUPABASE_KEY = "sb_publishable_iKPcSA5NVhhl--V35OP2cQ_ax2zvrob";
@@ -670,6 +689,7 @@
             const newData = Array.isArray(cloudOrSeededData) ? cloudOrSeededData.map(fromSupabaseAppointment) : [];
 
             if (silent) {
+                if (isBackgroundSyncPaused()) return;
                 if (JSON.stringify(appointments) !== JSON.stringify(newData)) {
                     appointments = newData;
                     localStorage.setItem('lumina_agenda_cache', JSON.stringify(newData));
@@ -689,7 +709,7 @@
             }
         }
     }
-    async function loadMonitors() {
+    async function loadMonitors(silent = false) {
         try {
             const data = await supabaseRequest(`${SUPABASE_TABLES.monitors}?select=*&order=monitora.asc`, {
                 method: 'GET'
@@ -697,9 +717,11 @@
             if (Array.isArray(data)) {
                 const names = data.map(m => m.monitora || m.Monitora || m.name).filter(Boolean);
                 if (names.length > 0) {
+                    const changed = JSON.stringify(MONITORAS) !== JSON.stringify(names);
+                    if (silent && isBackgroundSyncPaused()) return;
                     MONITORAS = names;
                     localStorage.setItem('lumina_monitoras', JSON.stringify(MONITORAS));
-                    render();
+                    if (!silent || changed) render();
                 }
             }
         } catch(e) {
@@ -1232,6 +1254,52 @@
         DOM.fTurno.addEventListener('input', handleFilterChange);
     }
 
+    if (DOM.agendaList) {
+        DOM.agendaList.addEventListener('click', (event) => {
+            const button = event.target.closest('[data-action]');
+            if (!button || !DOM.agendaList.contains(button)) return;
+
+            const action = button.dataset.action;
+            if (!action) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+            markUserInteraction();
+
+            if (action === 'progress') {
+                window.confirmProgressChange(button.dataset.id, button.dataset.date, button.dataset.stepCode, button.dataset.patient || 'paciente');
+                return;
+            }
+
+            if (action === 'absence') {
+                window.confirmAbsence(button.dataset.id, button.dataset.date, button.dataset.patient || 'paciente');
+                return;
+            }
+
+            if (action === 'map') {
+                window.openGpsMap(button.dataset.coords || '');
+                return;
+            }
+
+            if (action === 'edit') {
+                window.editAppointment(button.dataset.id);
+                return;
+            }
+
+            if (action === 'delete') {
+                window.deleteAppointment(button.dataset.id);
+            }
+        });
+
+        DOM.agendaList.addEventListener('change', (event) => {
+            const select = event.target.closest('.daily-monitor-select');
+            if (!select || !DOM.agendaList.contains(select)) return;
+
+            markUserInteraction();
+            window.updateDailyMonitor(select.dataset.id, select.dataset.date, select.value);
+        });
+    }
+
     const btnPrint = document.getElementById('btnPrint');
     if (btnPrint) {
         btnPrint.addEventListener('click', () => {
@@ -1579,7 +1647,7 @@
                     return `
                         <div class="progress-step-wrap">
                             ${index > 0 ? `<span class="progress-connector ${connectorClass}"></span>` : ''}
-                            <button type="button" ${disabledAttr} data-step-code="${step.code}" title="${escapeHtml(title)}" class="progress-step ${stepStateClass}" onclick="event.preventDefault(); event.stopPropagation(); window.confirmProgressChange('${itemIdJs}', '${dateRef}', '${step.code}', '${pName}'); return false;">
+                            <button type="button" ${disabledAttr} data-action="progress" data-id="${escapeHtml(item.id)}" data-date="${escapeHtml(dateRef)}" data-step-code="${escapeHtml(step.code)}" data-patient="${escapeHtml(patientNameText)}" title="${escapeHtml(title)}" class="progress-step ${stepStateClass}">
                                 <span class="progress-step-icon ${completed ? 'completed' : ''}"><i class="ph ${completed ? 'ph-check' : step.icon}"></i></span>
                                 <span class="progress-step-label">${escapeHtml(step.label)}</span>
                                 ${timestamp ? `<span class="progress-step-time">${escapeHtml(timestamp)}</span>` : ''}
@@ -1591,11 +1659,11 @@
                 <div class="mt-1 pt-1.5 border-t border-textMain/5 flex flex-col gap-2 pointer-events-auto relative z-20">
                     <div class="monitor-action-row flex items-center gap-1.5">
                         <label class="text-[0.6rem] font-bold text-textMain/40 uppercase tracking-widest whitespace-nowrap">Monitora:</label>
-                        <select class="flex-1 bg-surface border border-textMain/10 rounded-lg px-2 py-1 text-[0.7rem] font-medium outline-none" onchange="window.updateDailyMonitor('${itemIdJs}', '${dateRef}', this.value)">
+                        <select class="daily-monitor-select flex-1 bg-surface border border-textMain/10 rounded-lg px-2 py-1 text-[0.7rem] font-medium outline-none" data-id="${escapeHtml(item.id)}" data-date="${escapeHtml(dateRef)}">
                             <option value="">Selecionar...</option>
                             ${monitorOptions}
                         </select>
-                        <button type="button" class="absence-btn ${isCancelled ? 'active' : ''}" onclick="confirmAbsence('${itemIdJs}', '${dateRef}', '${pName}')" title="${isCancelled && item.ausenciaMotivo ? escapeHtml(item.ausenciaMotivo) : 'Registrar que o paciente não irá'}">
+                        <button type="button" data-action="absence" data-id="${escapeHtml(item.id)}" data-date="${escapeHtml(dateRef)}" data-patient="${escapeHtml(patientNameText)}" class="absence-btn ${isCancelled ? 'active' : ''}" title="${isCancelled && item.ausenciaMotivo ? escapeHtml(item.ausenciaMotivo) : 'Registrar que o paciente não irá'}">
                             <i class="ph ph-x-circle"></i> Não irá
                         </button>
                     </div>
@@ -1616,7 +1684,7 @@
                     let gpsLink = '';
                     const coords = extractGpsCoordinates(gpsValue) || getAnyGpsCoordinates(item);
                     if (coords) {
-                        gpsLink = `<button type="button" onclick="event.preventDefault(); event.stopPropagation(); return window.openGpsMap('${escapeJsString(coords)}');" class="text-specBlue hover:underline ml-1 inline-flex items-center gap-0.5"><i class="ph ph-map-pin text-xs"></i> Ver Mapa</button>`;
+                        gpsLink = `<button type="button" data-action="map" data-coords="${escapeHtml(coords)}" class="text-specBlue hover:underline ml-1 inline-flex items-center gap-0.5"><i class="ph ph-map-pin text-xs"></i> Ver Mapa</button>`;
                     }
                     return `<div><span class="text-specGreen font-bold"><i class="ph ${step.icon}"></i> ${escapeHtml(step.label)}:</span> ${escapeHtml(item[step.timeField])} ${gpsLink}</div>`;
                 });
@@ -1625,7 +1693,7 @@
                 let ausenciaGpsLink = '';
                 const coords = extractGpsCoordinates(item.ausenciaGps) || getAnyGpsCoordinates(item);
                 if (coords) {
-                    ausenciaGpsLink = `<button type="button" onclick="event.preventDefault(); event.stopPropagation(); return window.openGpsMap('${escapeJsString(coords)}');" class="text-specBlue hover:underline ml-1 inline-flex items-center gap-0.5"><i class="ph ph-map-pin text-xs"></i> Ver Mapa</button>`;
+                    ausenciaGpsLink = `<button type="button" data-action="map" data-coords="${escapeHtml(coords)}" class="text-specBlue hover:underline ml-1 inline-flex items-center gap-0.5"><i class="ph ph-map-pin text-xs"></i> Ver Mapa</button>`;
                 }
                 progressAuditItems.push(`<div><span class="text-specRed font-bold"><i class="ph ph-x-circle"></i> Não irá:</span> ${escapeHtml(item.ausenciaMotivo)} <span class="text-textMain/45">${escapeHtml(item.ausenciaTimestamp || '')}</span> ${ausenciaGpsLink}</div>`);
             }
@@ -1653,10 +1721,10 @@
                         <h3 class="patient-name">${patientNameHtml}</h3>
                     </div>
                     <div class="card-actions pointer-events-auto admin-only">
-                        <button class="btn-icon edit pointer-events-auto" onclick="editAppointment('${itemIdJs}')">
+                        <button type="button" class="btn-icon edit pointer-events-auto" data-action="edit" data-id="${escapeHtml(item.id)}">
                             <i class="ph ph-pencil-simple text-lg"></i>
                         </button>
-                        <button class="btn-icon delete pointer-events-auto" onclick="deleteAppointment('${itemIdJs}')">
+                        <button type="button" class="btn-icon delete pointer-events-auto" data-action="delete" data-id="${escapeHtml(item.id)}">
                             <i class="ph ph-trash text-lg"></i>
                         </button>
                     </div>
@@ -2076,15 +2144,17 @@
     
     // Auto-sync em tempo real (Background polling a cada 5 segundos)
     setInterval(() => {
+        if (isBackgroundSyncPaused()) return;
         loadData(true);
-        loadMonitors();
+        loadMonitors(true);
     }, 5000);
 
     // Sincronizar IMEDIATAMENTE ao voltar para o app (útil no celular)
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
+            if (isBackgroundSyncPaused()) return;
             loadData(true);
-            loadMonitors();
+            loadMonitors(true);
         }
     });
 
