@@ -3,401 +3,200 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Transporte - Novo Olhar - Agenda 2026</title>
-    <!-- Fonts -->
+    <title>Transporte - Novo Olhar</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
-    <!-- Phosphor Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#f8f9fa">
+    <meta name="theme-color" content="#f6f7fb">
     <link rel="apple-touch-icon" href="logo-ong.png">
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        background: '#f8f9fa',
-                        surface: '#f1f4f5',
-                        card: '#ffffff',
-                        textMain: '#2d3335',
-                        primaryStart: '#366194',
-                        primaryEnd: '#90b8f2',
-                        morning: '#90b8f2',
-                        afternoon: '#f8a826',
-                        specBlue: '#3b82f6',
-                        specRed: '#f43f5e',
-                        specYellow: '#f59e0b',
-                        specGreen: '#10b981',
-                        specPurple: '#8b5cf6',
-                        specOrange: '#f97316',
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                        display: ['Manrope', 'sans-serif'],
-                    },
-                    boxShadow: {
-                        'atmospheric': '0 20px 40px rgba(45, 51, 53, 0.06)',
-                        'atmospheric-hover': '0 30px 60px rgba(45, 51, 53, 0.1)'
-                    }
-                }
-            }
-        }
-    </script>
-    <link rel="stylesheet" href="style.css?v=14">
+    <link rel="stylesheet" href="style.css?v=18">
 </head>
-<body class="bg-background text-textMain font-sans h-screen overflow-hidden flex flex-col lg:flex-row selection:bg-primaryEnd selection:text-white relative viewer-mode">
-
-    <!-- Header / Sidebar -->
-    <aside class="bg-surface relative z-40 shrink-0 flex flex-row lg:flex-col items-center lg:items-stretch justify-between lg:justify-start w-full lg:w-64 p-4 lg:pt-8 lg:pb-6 lg:px-6 shadow-sm lg:shadow-none">
-        <div class="flex flex-row lg:flex-col items-center lg:text-center gap-3 lg:gap-5 lg:mb-8">
-            <img src="logo-ong.png" alt="Logo Novo Olhar" class="w-24 sm:w-28 lg:w-48 h-auto object-contain shrink-0 drop-shadow-md">
-            <div class="flex flex-col items-start lg:items-center w-full">
-                <div class="flex gap-2 items-center lg:justify-center w-full">
-                    <h1 class="font-display font-bold text-[1.05rem] sm:text-lg lg:text-base leading-[1.1] tracking-tight text-left lg:text-center">
-                        TRANSPORTE - NOVO OLHAR
-                    </h1>
-                    <div class="shrink-0 flex items-center">
-                        <button id="btnAdminLogin" class="text-textMain/30 hover:text-specBlue transition-colors" title="Acesso Admin">
-                            <i class="ph ph-lock-key text-lg"></i>
-                        </button>
-                        <button id="btnAdminLogout" class="text-specBlue hidden hover:text-specRed transition-colors" title="Sair do Admin">
-                            <i class="ph ph-lock-key-open text-lg"></i>
-                        </button>
-                        <button id="btnManageMonitorsMobile" class="admin-only text-specPurple hover:text-specPurple/70 transition-colors ml-2" title="Gerenciar Monitoras">
-                            <i class="ph ph-users-three text-lg"></i>
-                        </button>
-                        <button id="btnDownloadExcelTemplateMobile" class="admin-only text-specGreen hover:text-specGreen/70 transition-colors ml-2" title="Baixar Modelo Excel">
-                            <i class="ph ph-file-xls text-lg"></i>
-                        </button>
-                        <button id="btnImportExcelMobile" class="admin-only text-specBlue hover:text-specBlue/70 transition-colors ml-2" title="Importar Planilha Preenchida">
-                            <i class="ph ph-upload-simple text-lg"></i>
-                        </button>
-                    </div>
-                </div>
-                <p class="text-[0.65rem] lg:text-[0.65rem] font-bold text-textMain/50 uppercase tracking-[0.2em] mt-0.5 lg:mt-2 w-full text-left lg:text-center">AGENDA 2026</p>
+<body class="viewer-mode">
+    <aside class="app-sidebar">
+        <div class="brand-block">
+            <img src="logo-ong.png" alt="Novo Olhar">
+            <div>
+                <h1>Transporte Novo Olhar</h1>
+                <p>Agenda 2026</p>
             </div>
         </div>
 
-        <nav class="hidden lg:flex flex-1 flex-col space-y-2">
-            <a href="#" class="flex items-center gap-3 px-4 py-3 bg-white rounded-xl shadow-atmospheric font-medium text-sm text-textMain transition-transform hover:-translate-y-0.5" id="navAgenda">
-                <i class="ph ph-squares-four text-xl text-specBlue"></i> Visão Geral
-            </a>
-            <button class="admin-only flex items-center gap-3 px-4 py-3 bg-white rounded-xl shadow-atmospheric font-medium text-sm text-textMain transition-transform hover:-translate-y-0.5 w-full text-left" id="btnManageMonitors">
-                <i class="ph ph-users-three text-xl text-specPurple"></i> Gerenciar Monitoras
-            </button>
-            <button class="admin-only flex items-center gap-3 px-4 py-3 bg-white rounded-xl shadow-atmospheric font-medium text-sm text-textMain transition-transform hover:-translate-y-0.5 w-full text-left" id="btnDownloadExcelTemplate">
-                <i class="ph ph-file-xls text-xl text-specGreen"></i> Baixar Modelo Excel
-            </button>
-            <button class="admin-only flex items-center gap-3 px-4 py-3 bg-white rounded-xl shadow-atmospheric font-medium text-sm text-textMain transition-transform hover:-translate-y-0.5 w-full text-left" id="btnImportExcel">
-                <i class="ph ph-upload-simple text-xl text-specBlue"></i> Importar Planilha
-            </button>
+        <div class="quick-actions">
+            <button id="btnAdminLogin" title="Acesso Admin"><i class="ph ph-lock-key"></i></button>
+            <button id="btnAdminLogout" class="hidden" title="Sair do Admin"><i class="ph ph-lock-key-open"></i></button>
+            <button id="btnManageMonitorsMobile" class="admin-only" title="Monitoras"><i class="ph ph-users-three"></i></button>
+            <button id="btnDownloadExcelTemplateMobile" class="admin-only" title="Modelo Excel"><i class="ph ph-file-xls"></i></button>
+            <button id="btnImportExcelMobile" class="admin-only" title="Importar"><i class="ph ph-upload-simple"></i></button>
+        </div>
+
+        <nav class="desktop-nav">
+            <a href="#" id="navAgenda"><i class="ph ph-squares-four"></i> Visão Geral</a>
+            <button id="btnManageMonitors" class="admin-only"><i class="ph ph-users-three"></i> Monitoras</button>
+            <button id="btnDownloadExcelTemplate" class="admin-only"><i class="ph ph-file-xls"></i> Modelo Excel</button>
+            <button id="btnImportExcel" class="admin-only"><i class="ph ph-upload-simple"></i> Importar Planilha</button>
         </nav>
 
-        <!-- Prefecture footer (Desktop) -->
-        <div class="hidden lg:flex flex-col items-center text-center mt-auto mb-4 p-4 bg-white/60 rounded-xl shadow-sm border border-white/40">
-            <img src="logo-prefeitura.png" alt="Prefeitura" class="w-14 h-auto mb-3" onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Bras%C3%A3o_de_Jacutinga_%28Minas_Gerais%29.png/150px-Bras%C3%A3o_de_Jacutinga_%28Minas_Gerais%29.png'">
-            <div class="text-[0.55rem] font-bold text-textMain leading-[1.4] uppercase tracking-wider">
-                Prefeitura Municipal de Jacutinga<br>
-                <span class="text-specBlue">Secretaria Municipal de Educação</span><br>
-                Depto. Transporte Escolar
-            </div>
-        </div>
-
-        <button id="btnNewAppointment" class="admin-only hidden lg:flex w-full py-4 rounded-xl bg-gradient-to-r from-specBlue via-specPurple to-specRed text-white font-medium shadow-atmospheric hover:shadow-atmospheric-hover transition-all items-center justify-center gap-2 transform hover:-translate-y-1">
-            <i class="ph ph-plus-circle text-lg"></i> Novo Agendamento
-        </button>
+        <button id="btnNewAppointment" class="primary-action admin-only"><i class="ph ph-plus-circle"></i> Novo atendimento</button>
     </aside>
 
-    <!-- Main Content -->
-    <main class="flex-1 flex flex-col h-full relative z-10 w-full overflow-hidden" id="mainContainer">
-        <!-- Top Filters -->
-        <header class="bg-surface flex flex-col sm:flex-row items-start sm:items-center px-4 md:px-10 py-4 gap-4 shrink-0 relative z-30 shadow-sm sm:shadow-none min-h-[auto] sm:min-h-[6rem]">
-            <div class="flex items-center justify-between w-full sm:w-auto mr-0 sm:mr-4">
-                <div class="flex items-center gap-3 text-textMain/90 font-display font-bold text-xl sm:text-2xl tracking-tight">
-                    <i class="ph ph-clock text-specBlue"></i>
-                    <span id="liveClock">--:--</span>
-                </div>
-                <!-- Small counter just for extreme mobile -->
-                <div class="sm:hidden text-xs font-bold text-textMain px-3 py-1.5 bg-textMain/5 rounded-lg">
-                    <span id="appointmentCountMobile" class="text-specBlue">0</span> agendamentos
-                </div>
+    <main id="mainContainer" class="app-main">
+        <header class="topbar">
+            <div class="today-bar">
+                <div class="clock-box"><i class="ph ph-clock"></i><span id="liveClock">--:--</span></div>
+                <div class="count-box"><span id="appointmentCountMobile">0</span> atendimentos</div>
             </div>
-            
-            <div class="flex flex-wrap sm:flex-nowrap gap-2 sm:gap-4 w-full sm:flex-1 overflow-x-auto custom-scrollbar pb-2 sm:pb-0">
-                <div class="relative flex-1 sm:flex-none flex items-center bg-white rounded-xl shadow-atmospheric p-1 sm:min-w-[200px]">
-                    <button id="btnPrevDay" class="w-8 h-8 rounded-lg hover:bg-surface flex items-center justify-center text-textMain/50 hover:text-specBlue transition-colors"><i class="ph ph-caret-left font-bold"></i></button>
-                    <div class="relative flex-1">
-                        <input type="date" id="filterDataRef" class="w-full bg-transparent px-2 py-1.5 sm:py-2 text-[0.8rem] sm:text-sm font-bold text-center outline-none text-textMain cursor-pointer uppercase">
-                    </div>
-                    <button id="btnNextDay" class="w-8 h-8 rounded-lg hover:bg-surface flex items-center justify-center text-textMain/50 hover:text-specBlue transition-colors"><i class="ph ph-caret-right font-bold"></i></button>
+
+            <section class="filters-panel" aria-label="Filtros">
+                <div class="date-control">
+                    <button id="btnPrevDay" type="button" aria-label="Dia anterior"><i class="ph ph-caret-left"></i></button>
+                    <input type="date" id="filterDataRef">
+                    <button id="btnNextDay" type="button" aria-label="Próximo dia"><i class="ph ph-caret-right"></i></button>
                 </div>
-                <div class="relative flex-1 sm:flex-none min-w-[160px] sm:min-w-[200px]">
-                    <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-textMain/50 z-10 pointer-events-none"></i>
-                    <input type="text" id="filterPaciente" placeholder="Buscar paciente..." class="w-full bg-white pl-9 pr-3 py-2 sm:py-3 rounded-xl text-sm font-medium outline-none shadow-atmospheric text-textMain placeholder:text-textMain/40">
-                </div>
-                <select id="filterProfissional" class="bg-white px-3 sm:px-4 py-2 sm:py-3 rounded-xl text-sm font-medium outline-none shadow-atmospheric text-textMain cursor-pointer flex-1 sm:flex-none sm:min-w-[150px]">
+                <label class="search-control">
+                    <i class="ph ph-magnifying-glass"></i>
+                    <input type="text" id="filterPaciente" placeholder="Buscar paciente">
+                </label>
+                <select id="filterProfissional">
                     <option value="">Profissionais</option>
                 </select>
-                <select id="filterTurno" class="bg-white px-3 sm:px-4 py-2 sm:py-3 rounded-xl text-sm font-medium outline-none shadow-atmospheric text-textMain cursor-pointer flex-1 sm:flex-none sm:min-w-[140px]">
+                <select id="filterTurno">
                     <option value="">Turnos</option>
                     <option value="Manhã">Manhã</option>
                     <option value="Tarde">Tarde</option>
                 </select>
-                <select id="filterEscola" class="bg-white px-3 sm:px-4 py-2 sm:py-3 rounded-xl text-sm font-medium outline-none shadow-atmospheric text-textMain cursor-pointer flex-1 sm:flex-none sm:min-w-[160px]">
+                <select id="filterEscola">
                     <option value="">Instituições</option>
                 </select>
-                <button id="btnClearFilters" class="hidden shrink-0 w-9 h-9 sm:w-[46px] sm:h-[46px] bg-specRed/10 text-specRed rounded-xl flex items-center justify-center hover:bg-specRed hover:text-white transition-colors" title="Limpar filtros">
-                    <i class="ph ph-funnel-x text-lg"></i>
-                </button>
-            </div>
-            
-            <div class="hidden sm:block text-sm font-bold text-textMain px-4 py-2 bg-textMain/5 rounded-lg shrink-0">
-                <span id="appointmentCount" class="text-specBlue">0</span> agendamentos
-            </div>
+                <button id="btnClearFilters" class="clear-filters hidden" type="button"><i class="ph ph-funnel-x"></i> Limpar filtros</button>
+            </section>
+
+            <div class="desktop-count"><span id="appointmentCount">0</span> agendamentos</div>
         </header>
 
-        <!-- Dashboard -->
-        <section id="dashboardPanel" class="bg-background px-4 md:px-8 pt-3 pb-1.5 shrink-0 relative">
-            <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2 sm:gap-3">
-                <!-- Card Total -->
-                <button type="button" id="dashTotalCard" class="dashboard-card col-span-1 bg-white rounded-xl p-2.5 text-left shadow-atmospheric hover:shadow-atmospheric-hover transition-all">
-                    <div class="flex items-center justify-between gap-2">
-                        <span class="text-[0.6rem] font-bold text-textMain/45 uppercase tracking-widest leading-tight">Atendimentos do dia</span>
-                        <i class="ph ph-calendar-check text-lg text-specBlue shrink-0"></i>
-                    </div>
-                    <div class="mt-0.5 font-display font-extrabold text-xl text-textMain" id="dashTotal">0</div>
-                    <div class="text-[0.62rem] font-semibold text-textMain/50" id="dashDateLabel">Hoje</div>
-                </button>
-
-                <!-- Card Manhã -->
-                <button type="button" id="dashMorningCard" class="dashboard-card bg-white rounded-xl p-2.5 text-left shadow-atmospheric hover:shadow-atmospheric-hover transition-all">
-                    <div class="flex items-center justify-between gap-2">
-                        <span class="text-[0.6rem] font-bold text-textMain/45 uppercase tracking-widest leading-tight">Manhã</span>
-                        <i class="ph ph-sun-horizon text-lg text-specBlue shrink-0"></i>
-                    </div>
-                    <div class="mt-0.5 font-display font-extrabold text-xl text-textMain" id="dashMorning">0</div>
-                    <div class="text-[0.62rem] font-semibold text-textMain/50">Clique para filtrar</div>
-                </button>
-
-                <!-- Card Tarde -->
-                <button type="button" id="dashAfternoonCard" class="dashboard-card bg-white rounded-xl p-2.5 text-left shadow-atmospheric hover:shadow-atmospheric-hover transition-all">
-                    <div class="flex items-center justify-between gap-2">
-                        <span class="text-[0.6rem] font-bold text-textMain/45 uppercase tracking-widest leading-tight">Tarde</span>
-                        <i class="ph ph-sun text-lg text-specYellow shrink-0"></i>
-                    </div>
-                    <div class="mt-0.5 font-display font-extrabold text-xl text-textMain" id="dashAfternoon">0</div>
-                    <div class="text-[0.62rem] font-semibold text-textMain/50">Clique para filtrar</div>
-                </button>
-
-                <!-- Card Escolas -->
-                <div class="dashboard-card group col-span-2 md:col-span-1 bg-white rounded-xl p-2.5 shadow-atmospheric cursor-default">
-                    <div class="flex justify-between items-center mb-1">
-                        <div>
-                            <span class="text-[0.6rem] font-bold text-textMain/40 tracking-wider uppercase">Por Instituição</span>
-                            <span class="ml-1.5 text-[0.6rem] font-bold text-specPurple bg-specPurple/10 px-1.5 py-0.5 rounded-full" id="dashSchoolsCount">0</span>
-                        </div>
-                        <i class="ph ph-buildings text-lg text-specPurple/60 group-hover:text-specPurple transition-colors shrink-0"></i>
-                    </div>
-                    <div id="dashSchools" class="flex flex-col gap-1 max-h-[96px] overflow-y-auto custom-scrollbar pr-0.5">
-                        <div class="text-xs font-semibold text-textMain/45">Sem dados</div>
-                    </div>
-                </div>
-
-                <!-- Card Monitoras -->
-                <div class="dashboard-card group col-span-2 md:col-span-1 bg-white rounded-xl p-2.5 shadow-atmospheric cursor-default">
-                    <div class="flex justify-between items-center mb-1">
-                        <div>
-                            <span class="text-[0.6rem] font-bold text-textMain/40 tracking-wider uppercase">Por Monitora</span>
-                            <span class="ml-1.5 text-[0.6rem] font-bold text-specOrange bg-specOrange/10 px-1.5 py-0.5 rounded-full" id="dashMonitorsCount">0</span>
-                        </div>
-                        <i class="ph ph-users text-lg text-specOrange/60 group-hover:text-specOrange transition-colors shrink-0"></i>
-                    </div>
-                    <div id="dashMonitors" class="flex flex-col gap-1 max-h-[96px] overflow-y-auto custom-scrollbar pr-0.5">
-                    </div>
-                </div>
+        <section id="dashboardPanel" class="dashboard-panel">
+            <button type="button" id="dashTotalCard" class="metric-card">
+                <span>Atendimentos</span>
+                <strong id="dashTotal">0</strong>
+                <small id="dashDateLabel">Hoje</small>
+            </button>
+            <button type="button" id="dashMorningCard" class="metric-card">
+                <span>Manhã</span>
+                <strong id="dashMorning">0</strong>
+                <small>Filtrar</small>
+            </button>
+            <button type="button" id="dashAfternoonCard" class="metric-card">
+                <span>Tarde</span>
+                <strong id="dashAfternoon">0</strong>
+                <small>Filtrar</small>
+            </button>
+            <div class="summary-card">
+                <div class="summary-title">Instituições <strong id="dashSchoolsCount">0</strong></div>
+                <div id="dashSchools" class="summary-list"><div>Sem dados</div></div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-title">Monitoras <strong id="dashMonitorsCount">0</strong></div>
+                <div id="dashMonitors" class="summary-list"></div>
             </div>
         </section>
 
-        <!-- Card List Area -->
-        <div class="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:px-8 sm:py-4 pb-20 custom-scrollbar relative z-20" id="agendaBoard">
-            <div class="max-w-5xl mx-auto flex flex-col gap-2" id="agendaList">
-                <!-- Cards injected here via JS -->
-            </div>
-            
-            <!-- Mobile Footer Prefecture -->
-            <div class="lg:hidden max-w-4xl mx-auto mt-8 mb-4 flex flex-col items-center text-center p-4 bg-white/50 rounded-xl opacity-80">
-                <img src="logo-prefeitura.png" alt="Prefeitura" class="w-12 h-auto mb-2" onerror="this.src='https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Bras%C3%A3o_de_Jacutinga_%28Minas_Gerais%29.png/150px-Bras%C3%A3o_de_Jacutinga_%28Minas_Gerais%29.png'">
-                <div class="text-[0.5rem] font-bold text-textMain/70 leading-[1.4] uppercase tracking-wider">
-                    Prefeitura Municipal de Jacutinga<br>
-                    Sec. Municipal de Educação &bull; Depto. Transporte Escolar
-                </div>
-            </div>
-        </div>
+        <section id="agendaBoard" class="agenda-board">
+            <div id="agendaList" class="agenda-list"></div>
+        </section>
     </main>
 
-    <!-- Mobile FAB (Floating Action Button) -->
-    <button id="btnNewAppointmentMobile" class="admin-only lg:hidden fixed bottom-6 right-6 w-14 h-14 rounded-full bg-gradient-to-br from-specBlue via-specPurple to-specRed text-white shadow-atmospheric hover:scale-105 flex items-center justify-center active:scale-95 transition-transform z-[55]">
-        <i class="ph ph-plus text-2xl"></i>
-    </button>
+    <button id="btnNewAppointmentMobile" class="floating-new admin-only" type="button"><i class="ph ph-plus"></i></button>
     <input type="file" id="excelImportInput" class="hidden" accept=".xlsx,.xls,.csv">
 
-    <!-- Offcanvas Drawer -->
-    <div id="drawerOverlay" class="fixed inset-0 bg-textMain/10 backdrop-blur-[10px] sm:backdrop-blur-[20px] z-[60] opacity-0 pointer-events-none transition-opacity duration-300"></div>
-    <div id="drawer" class="fixed top-0 right-0 bottom-0 w-full sm:max-w-[440px] bg-white shadow-[-20px_0_40px_rgba(45,51,53,0.06)] z-[70] transform translate-x-full transition-transform duration-300 flex flex-col">
-        <div class="px-6 sm:px-8 py-6 flex justify-between items-center shrink-0">
-            <h2 class="font-display font-bold text-xl sm:text-2xl" id="drawerTitle">Novo Agendamento</h2>
-            <button id="closeDrawer" class="w-10 h-10 rounded-full bg-surface flex items-center justify-center text-textMain hover:bg-background hover:scale-105 transition-all">
-                <i class="ph ph-x text-xl"></i>
-            </button>
+    <div id="drawerOverlay" class="overlay hidden-layer"></div>
+    <aside id="drawer" class="drawer">
+        <div class="drawer-head">
+            <h2 id="drawerTitle">Novo atendimento</h2>
+            <button id="closeDrawer" type="button"><i class="ph ph-x"></i></button>
         </div>
-        <div class="flex-1 overflow-y-auto px-6 sm:px-8 pb-8 custom-scrollbar">
-            <form id="appointmentForm" class="flex flex-col gap-6">
-                <input type="hidden" id="formId">
-                
-                <div class="p-4 bg-background rounded-2xl flex flex-col gap-5">
-                    <h3 class="font-display font-semibold text-sm text-textMain/60 uppercase tracking-wider mb-2">Informações do Profissional</h3>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="flex flex-col gap-2">
-                            <label class="text-[0.7rem] font-bold text-textMain/70 uppercase tracking-widest pl-1">Profissional</label>
-                            <input type="text" id="formProfissional" required class="bg-white px-4 py-3 rounded-xl text-sm font-medium outline-none shadow-sm" placeholder="Ex: Juliana">
-                        </div>
-                        <div class="flex flex-col gap-2">
-                            <label class="text-[0.7rem] font-bold text-textMain/70 uppercase tracking-widest pl-1">Atendimento</label>
-                            <input type="text" id="formTipo" required class="bg-white px-4 py-3 rounded-xl text-sm font-medium outline-none shadow-sm" placeholder="Ex: Psicóloga">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="flex flex-col gap-2 px-1">
-                    <label class="text-[0.7rem] font-bold text-textMain/70 uppercase tracking-widest pl-1">Paciente</label>
-                    <input type="text" id="formPaciente" required class="bg-surface px-4 py-3.5 rounded-xl text-sm font-medium outline-none" placeholder="Nome completo">
-                </div>
-
-                <div class="flex flex-col gap-2 px-1">
-                    <label class="text-[0.7rem] font-bold text-textMain/70 uppercase tracking-widest pl-1">Data Início</label>
-                    <input type="date" id="formDataInicio" required class="bg-surface px-4 py-3 rounded-xl text-sm font-medium outline-none text-textMain cursor-pointer">
-                </div>
-
-                <div class="grid grid-cols-2 gap-4 px-1">
-                    <div class="flex flex-col gap-2">
-                        <label class="text-[0.7rem] font-bold text-textMain/70 uppercase tracking-widest pl-1">Início</label>
-                        <input type="time" id="formInicio" required class="bg-surface px-4 py-3 rounded-xl text-sm font-medium outline-none">
-                    </div>
-                    <div class="flex flex-col gap-2">
-                        <label class="text-[0.7rem] font-bold text-textMain/70 uppercase tracking-widest pl-1">Término</label>
-                        <input type="time" id="formTermino" required class="bg-surface px-4 py-3 rounded-xl text-sm font-medium outline-none">
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-4 px-1">
-                    <div class="flex flex-col gap-2">
-                        <label class="text-[0.7rem] font-bold text-textMain/70 uppercase tracking-widest pl-1">Instituição</label>
-                        <select id="formEscola" class="bg-surface px-4 py-3 rounded-xl text-sm font-medium outline-none">
-                            <option value="">Selecione...</option>
-                            <option value="EE FLORIANO SARETTI">EE FLORIANO SARETTI</option>
-                            <option value="EE JULIO BRANDAO">EE JULIO BRANDAO</option>
-                            <option value="EM PROFESSOR ALFEU DUARTE">EM PROFESSOR ALFEU DUARTE</option>
-                            <option value="EE PROFESSORA MARIA ROBERTO DE LIMA">EE PROFESSORA MARIA ROBERTO DE LIMA</option>
-                            <option value="ESCOLA MUNICIPAL HILDEBRANDO CLARK">ESCOLA MUNICIPAL HILDEBRANDO CLARK</option>
-                            <option value="EM DR MILTON CAMPOS">EM DR MILTON CAMPOS</option>
-                            <option value="EM PROFESSORA DONA WILMA PIERONI">EM PROFESSORA DONA WILMA PIERONI</option>
-                            <option value="EMEI PROFESSORA HELENA PIERONI SEBUSIANI">EMEI PROFESSORA HELENA PIERONI SEBUSIANI</option>
-                            <option value="EM PROFESSOR MICHEL FARHAT">EM PROFESSOR MICHEL FARHAT</option>
-                            <option value="C MUN EDUC INF PE SILVERIO NEGRI">C MUN EDUC INF PE SILVERIO NEGRI</option>
-                            <option value="CRECHE MUNICIPAL MARIA JOSE LEGATTI RODRIGUES">CRECHE MUNICIPAL MARIA JOSE LEGATTI RODRIGUES</option>
-                            <option value="CRECHE MUNICIPAL MONSENHOR VIEIRA">CRECHE MUNICIPAL MONSENHOR VIEIRA</option>
-                            <option value="CRECHE MUNICIPAL VEREADOR DOUTOR URBANO LOPES SIQUEIRA">CRECHE MUNICIPAL VEREADOR DOUTOR URBANO LOPES SIQUEIRA</option>
-                            <option value="CRECHE MUNICIPAL PROFESSOR DR JOAO ALVES">CRECHE MUNICIPAL PROFESSOR DR JOAO ALVES</option>
-                            <option value="EM ANTONIO NICOLETI">EM ANTONIO NICOLETI</option>
-                            <option value="CEI-CENTRO DE EDUCACAO INFANTIL JOAO LEGATTI">CEI-CENTRO DE EDUCACAO INFANTIL JOAO LEGATTI</option>
-                            <option value="CASA DA CRIANÇA">CASA DA CRIANÇA</option>
-                            <option value="APAE">APAE</option>
-                            <option value="LAR">LAR</option>
-                            <option value="ACAE">ACAE</option>
-                        </select>
-                    </div>
-                    <div class="flex flex-col gap-2">
-                        <label class="text-[0.7rem] font-bold text-textMain/70 uppercase tracking-widest pl-1">Telefone</label>
-                        <input type="tel" id="formTelefone" class="bg-surface px-4 py-3 rounded-xl text-sm font-medium outline-none" placeholder="11999999999">
-                    </div>
-                </div>
-
-
-
-                <div class="flex flex-col gap-2 px-1">
-                    <label class="text-[0.7rem] font-bold text-textMain/70 uppercase tracking-widest pl-1">Trajeto do Transporte</label>
-                    <select id="formTransporte" class="bg-surface px-4 py-3 rounded-xl text-sm font-medium outline-none">
-                        <option value="Ambos">Entrada e Saída (Ambos)</option>
-                        <option value="Entrada">Somente Entrada</option>
-                        <option value="Saída">Somente Saída</option>
+        <form id="appointmentForm" class="drawer-form">
+            <input type="hidden" id="formId">
+            <div class="form-grid">
+                <label>Profissional<input type="text" id="formProfissional" required placeholder="Ex: Juliana"></label>
+                <label>Atendimento<input type="text" id="formTipo" required placeholder="Ex: Psicóloga"></label>
+            </div>
+            <label>Paciente<input type="text" id="formPaciente" required placeholder="Nome completo"></label>
+            <label>Data início<input type="date" id="formDataInicio" required></label>
+            <div class="form-grid">
+                <label>Início<input type="time" id="formInicio" required></label>
+                <label>Término<input type="time" id="formTermino" required></label>
+            </div>
+            <div class="form-grid">
+                <label>Instituição
+                    <select id="formEscola">
+                        <option value="">Selecione...</option>
+                        <option value="EE FLORIANO SARETTI">EE FLORIANO SARETTI</option>
+                        <option value="EE JULIO BRANDAO">EE JULIO BRANDAO</option>
+                        <option value="EM PROFESSOR ALFEU DUARTE">EM PROFESSOR ALFEU DUARTE</option>
+                        <option value="EE PROFESSORA MARIA ROBERTO DE LIMA">EE PROFESSORA MARIA ROBERTO DE LIMA</option>
+                        <option value="ESCOLA MUNICIPAL HILDEBRANDO CLARK">ESCOLA MUNICIPAL HILDEBRANDO CLARK</option>
+                        <option value="EM DR MILTON CAMPOS">EM DR MILTON CAMPOS</option>
+                        <option value="EM PROFESSORA DONA WILMA PIERONI">EM PROFESSORA DONA WILMA PIERONI</option>
+                        <option value="EMEI PROFESSORA HELENA PIERONI SEBUSIANI">EMEI PROFESSORA HELENA PIERONI SEBUSIANI</option>
+                        <option value="EM PROFESSOR MICHEL FARHAT">EM PROFESSOR MICHEL FARHAT</option>
+                        <option value="C MUN EDUC INF PE SILVERIO NEGRI">C MUN EDUC INF PE SILVERIO NEGRI</option>
+                        <option value="CRECHE MUNICIPAL MARIA JOSE LEGATTI RODRIGUES">CRECHE MUNICIPAL MARIA JOSE LEGATTI RODRIGUES</option>
+                        <option value="CRECHE MUNICIPAL MONSENHOR VIEIRA">CRECHE MUNICIPAL MONSENHOR VIEIRA</option>
+                        <option value="CRECHE MUNICIPAL VEREADOR DOUTOR URBANO LOPES SIQUEIRA">CRECHE MUNICIPAL VEREADOR DOUTOR URBANO LOPES SIQUEIRA</option>
+                        <option value="CRECHE MUNICIPAL PROFESSOR DR JOAO ALVES">CRECHE MUNICIPAL PROFESSOR DR JOAO ALVES</option>
+                        <option value="EM ANTONIO NICOLETI">EM ANTONIO NICOLETI</option>
+                        <option value="CEI-CENTRO DE EDUCACAO INFANTIL JOAO LEGATTI">CEI-CENTRO DE EDUCACAO INFANTIL JOAO LEGATTI</option>
+                        <option value="CASA DA CRIANÇA">CASA DA CRIANÇA</option>
+                        <option value="APAE">APAE</option>
+                        <option value="LAR">LAR</option>
+                        <option value="ACAE">ACAE</option>
                     </select>
-                </div>
+                </label>
+                <label>Telefone<input type="tel" id="formTelefone" placeholder="11999999999"></label>
+            </div>
+            <label>Trajeto
+                <select id="formTransporte">
+                    <option value="Ambos">Entrada e Saída</option>
+                    <option value="Entrada">Somente Entrada</option>
+                    <option value="Saída">Somente Saída</option>
+                </select>
+            </label>
+            <label>Observações<input type="text" id="formObs" placeholder="Ex: CONFIRMADO"></label>
+            <button type="submit" class="save-button">Salvar</button>
+        </form>
+    </aside>
 
-                <div class="flex flex-col gap-2 px-1">
-                    <label class="text-[0.7rem] font-bold text-textMain/70 uppercase tracking-widest pl-1">Observações</label>
-                    <input type="text" id="formObs" class="bg-surface px-4 py-3 rounded-xl text-sm font-medium outline-none" placeholder="Ex: CONFIRMADO">
-                </div>
-
-                <button type="submit" class="w-full py-4 mt-2 rounded-xl bg-textMain text-white font-display font-bold shadow-atmospheric hover:bg-black transition-colors transform hover:-translate-y-1">
-                    Salvar
-                </button>
-            </form>
+    <div id="monitorsModalOverlay" class="modal-overlay">
+        <div id="monitorsModal" class="modal-card">
+            <div class="modal-head">
+                <h3>Monitoras</h3>
+                <button id="btnCloseMonitors" type="button"><i class="ph ph-x"></i></button>
+            </div>
+            <div class="inline-form">
+                <input type="text" id="newMonitorName" placeholder="Nome da monitora">
+                <button id="btnAddMonitor" type="button"><i class="ph ph-plus-circle"></i> Add</button>
+            </div>
+            <div id="monitorsList" class="monitors-list"></div>
+            <button id="btnSaveMonitors" type="button" class="save-button">Concluído</button>
         </div>
     </div>
 
-    <!-- Monitors Management Modal -->
-    <div id="monitorsModalOverlay" class="fixed inset-0 bg-textMain/20 backdrop-blur-md z-[100] opacity-0 pointer-events-none transition-all duration-300 flex items-center justify-center p-4">
-        <div id="monitorsModal" class="bg-white w-full max-w-md rounded-[2rem] shadow-atmospheric p-6 sm:p-8 transform scale-90 opacity-0 transition-all duration-300">
-            <div class="flex justify-between items-center mb-6">
-                <h3 class="font-display font-bold text-xl text-textMain">Gerenciar Monitoras</h3>
-                <button id="btnCloseMonitors" class="w-8 h-8 rounded-full bg-surface flex items-center justify-center hover:bg-background transition-all">
-                    <i class="ph ph-x text-lg"></i>
-                </button>
-            </div>
-            
-            <div class="flex gap-2 mb-6">
-                <input type="text" id="newMonitorName" placeholder="Nome da monitora..." class="flex-1 bg-surface px-4 py-2.5 rounded-xl text-sm font-medium outline-none border border-transparent focus:border-specPurple/30 transition-all">
-                <button id="btnAddMonitor" class="px-4 py-2.5 bg-specPurple text-white rounded-xl font-bold text-sm hover:bg-specPurple/90 transition-all flex items-center gap-2">
-                    <i class="ph ph-plus-circle"></i> Add
-                </button>
-            </div>
-
-            <div class="max-h-[300px] overflow-y-auto custom-scrollbar pr-2" id="monitorsList">
-                <!-- Monitor list items will be injected here -->
-            </div>
-
-            <div class="mt-8 pt-4 border-t border-textMain/5 flex justify-end">
-                <button id="btnSaveMonitors" class="px-8 py-3 rounded-xl bg-textMain text-white font-bold text-sm hover:bg-black transition-all">
-                    Concluído
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <div id="confirmModalOverlay" class="fixed inset-0 bg-textMain/20 backdrop-blur-[5px] z-[80] opacity-0 pointer-events-none transition-opacity duration-300 flex items-center justify-center px-4">
-        <div id="confirmModal" class="bg-white rounded-3xl p-6 sm:p-8 w-full max-w-sm shadow-[0_20px_60px_rgba(45,51,53,0.1)] transform scale-95 transition-transform duration-300 flex flex-col items-center text-center relative pointer-events-auto">
-            <div id="confirmModalIcon" class="w-16 h-16 rounded-2xl flex items-center justify-center mb-2 bg-specBlue/10 text-specBlue">
-                <i class="ph ph-question text-3xl"></i>
-            </div>
-            <h3 id="confirmModalTitle" class="font-display font-bold text-xl text-textMain mb-2">Confirmar</h3>
-            <p id="confirmModalMessage" class="text-sm text-textMain/60 font-medium mb-6">Tem certeza que deseja realizar esta ação?</p>
-            
-            <div class="flex w-full gap-3">
-                <button id="btnConfirmCancel" class="flex-1 py-3.5 rounded-xl font-bold text-sm bg-surface text-textMain/60 hover:bg-background hover:text-textMain transition-colors">Cancelar</button>
-                <button id="btnConfirmOk" class="flex-1 py-3.5 rounded-xl font-bold text-sm bg-textMain text-white hover:bg-black transition-colors shadow-atmospheric">Confirmar</button>
+    <div id="confirmModalOverlay" class="modal-overlay">
+        <div id="confirmModal" class="modal-card confirm-card">
+            <div id="confirmModalIcon" class="confirm-icon"><i class="ph ph-question"></i></div>
+            <h3 id="confirmModalTitle">Confirmar</h3>
+            <p id="confirmModalMessage">Tem certeza que deseja realizar esta ação?</p>
+            <div class="confirm-actions">
+                <button id="btnConfirmCancel" type="button">Cancelar</button>
+                <button id="btnConfirmOk" type="button">Confirmar</button>
             </div>
         </div>
     </div>
 
-    <!-- Toast Container -->
-    <div id="toastContainer" class="fixed top-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none"></div>
+    <div id="toastContainer" class="toast-container"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script src="app.js?v=22"></script>
-
+    <script src="app.js?v=23"></script>
 </body>
 </html>
