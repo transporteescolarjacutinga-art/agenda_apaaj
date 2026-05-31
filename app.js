@@ -306,10 +306,17 @@
     }
 
     async function supabaseRequest(path, options = {}) {
-        const response = await fetch(buildSupabaseUrl(path), {
-            ...options,
-            headers: supabaseHeaders(options.headers || {})
-        });
+        let response;
+        try {
+            response = await fetch(buildSupabaseUrl(path), {
+                mode: 'cors',
+                cache: 'no-store',
+                ...options,
+                headers: supabaseHeaders(options.headers || {})
+            });
+        } catch(e) {
+            throw new Error(`Não foi possível acessar o Supabase (${e.message}). Verifique bloqueio de rede, domínio do GitHub Pages ou extensões do navegador.`);
+        }
 
         const rawText = await response.text();
         let result = null;
@@ -635,7 +642,7 @@
                 return;
             }
 
-            const data = await supabaseRequest(`${SUPABASE_TABLES.appointments}?select=*&order=data.asc&order=inicio.asc&nocache=${Date.now()}`, {
+            const data = await supabaseRequest(`${SUPABASE_TABLES.appointments}?select=*&order=data.asc&order=inicio.asc`, {
                 method: 'GET'
             });
             const cloudOrSeededData = await syncLocalCacheToSupabaseIfEmpty(data);
@@ -657,13 +664,13 @@
         } catch(e) {
             if (!silent) {
                 console.error('Supabase load error:', e);
-                DOM.agendaList.innerHTML = '<div class="py-12 text-center text-red-500 font-medium">Falha na conexão com o Supabase. Verifique a tabela e as políticas RLS.</div>';
+                DOM.agendaList.innerHTML = `<div class="py-12 px-4 text-center text-red-500 font-medium">Falha na conexão com o Supabase.<br><span class="text-xs text-textMain/60">${escapeHtml(e.message)}</span></div>`;
             }
         }
     }
     async function loadMonitors() {
         try {
-            const data = await supabaseRequest(`${SUPABASE_TABLES.monitors}?select=*&order=monitora.asc&nocache=${Date.now()}`, {
+            const data = await supabaseRequest(`${SUPABASE_TABLES.monitors}?select=*&order=monitora.asc`, {
                 method: 'GET'
             });
             if (Array.isArray(data)) {
