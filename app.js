@@ -227,14 +227,34 @@
         const raw = fixTextEncoding(value)
             .normalize('NFD')
             .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9:]/gi, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
             .toLowerCase();
 
         if (raw.includes('tarde')) return 'Tarde';
-        if (raw.includes('manha') || raw.includes('manh')) return 'Manhã';
+        if (raw.includes('manha') || raw.includes('mana') || raw.includes('manh')) return 'Manhã';
 
-        const hour = parseInt(String(inicioValue || '').split(':')[0], 10);
+        const hourMatch = String(inicioValue || '').match(/\d{1,2}/);
+        const hour = hourMatch ? parseInt(hourMatch[0], 10) : NaN;
         if (!Number.isNaN(hour)) return hour >= 13 ? 'Tarde' : 'Manhã';
         return '';
+    }
+
+    function normalizeFilterText(value) {
+        return fixTextEncoding(value)
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9]/gi, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .toLowerCase();
+    }
+
+    function valuesMatchFilter(value, selectedValue) {
+        const selected = normalizeFilterText(selectedValue);
+        if (!selected) return true;
+        return normalizeFilterText(value) === selected;
     }
 
     function getProgressStepsForTransport(transporte) {
@@ -1364,16 +1384,18 @@
     function getFilteredAppointments({ ignoreTurno = false, ignoreEscola = false, ignoreMonitora = false } = {}) {
         const { dateRef } = getDateFilterInfo();
         const selectedTurno = normalizeTurnoLabel(DOM.fTurno?.value || '');
+        const selectedProfissional = DOM.fProf?.value || '';
+        const selectedEscola = DOM.fEscola?.value || '';
+        const searchVal = normalizeFilterText(DOM.fPaciente?.value || '');
 
         return appointments.filter(a => {
             const dateMatch = !dateRef || a.data === dateRef;
-            const pMatch = !DOM.fProf.value || a.profissional === DOM.fProf.value;
-            const tMatch = ignoreTurno || !selectedTurno || normalizeTurnoLabel(a.turno, a.inicio) === selectedTurno;
-            const eMatch = ignoreEscola || !DOM.fEscola.value || a.escola === DOM.fEscola.value;
+            const pMatch = valuesMatchFilter(a.profissional, selectedProfissional);
+            const itemTurno = normalizeTurnoLabel(a.turno, a.inicio);
+            const tMatch = ignoreTurno || !selectedTurno || itemTurno === selectedTurno;
+            const eMatch = ignoreEscola || valuesMatchFilter(a.escola, selectedEscola);
             const mMatch = ignoreMonitora || !a.monitora; // No monitora filter in top bar, so ignore this or always return true.
-
-            const searchVal = DOM.fPaciente ? DOM.fPaciente.value.toLowerCase() : '';
-            const pacienteMatch = !searchVal || (a.paciente && a.paciente.toLowerCase().includes(searchVal));
+            const pacienteMatch = !searchVal || normalizeFilterText(a.paciente).includes(searchVal);
 
             return dateMatch && pMatch && tMatch && eMatch && pacienteMatch;
         });
