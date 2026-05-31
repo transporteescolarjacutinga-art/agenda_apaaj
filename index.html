@@ -47,7 +47,7 @@
             }
         }
     </script>
-    <link rel="stylesheet" href="style.css?v=2">
+    <link rel="stylesheet" href="style.css?v=6">
 </head>
 <body class="bg-background text-textMain font-sans h-screen overflow-hidden flex flex-col lg:flex-row selection:bg-primaryEnd selection:text-white relative viewer-mode">
 
@@ -70,6 +70,12 @@
                         <button id="btnManageMonitorsMobile" class="admin-only text-specPurple hover:text-specPurple/70 transition-colors ml-2" title="Gerenciar Monitoras">
                             <i class="ph ph-users-three text-lg"></i>
                         </button>
+                        <button id="btnDownloadExcelTemplateMobile" class="admin-only text-specGreen hover:text-specGreen/70 transition-colors ml-2" title="Baixar Modelo Excel">
+                            <i class="ph ph-file-xls text-lg"></i>
+                        </button>
+                        <button id="btnImportExcelMobile" class="admin-only text-specBlue hover:text-specBlue/70 transition-colors ml-2" title="Importar Planilha Preenchida">
+                            <i class="ph ph-upload-simple text-lg"></i>
+                        </button>
                     </div>
                 </div>
                 <p class="text-[0.65rem] lg:text-[0.65rem] font-bold text-textMain/50 uppercase tracking-[0.2em] mt-0.5 lg:mt-2 w-full text-left lg:text-center">AGENDA 2026</p>
@@ -82,6 +88,12 @@
             </a>
             <button class="admin-only flex items-center gap-3 px-4 py-3 bg-white rounded-xl shadow-atmospheric font-medium text-sm text-textMain transition-transform hover:-translate-y-0.5 w-full text-left" id="btnManageMonitors">
                 <i class="ph ph-users-three text-xl text-specPurple"></i> Gerenciar Monitoras
+            </button>
+            <button class="admin-only flex items-center gap-3 px-4 py-3 bg-white rounded-xl shadow-atmospheric font-medium text-sm text-textMain transition-transform hover:-translate-y-0.5 w-full text-left" id="btnDownloadExcelTemplate">
+                <i class="ph ph-file-xls text-xl text-specGreen"></i> Baixar Modelo Excel
+            </button>
+            <button class="admin-only flex items-center gap-3 px-4 py-3 bg-white rounded-xl shadow-atmospheric font-medium text-sm text-textMain transition-transform hover:-translate-y-0.5 w-full text-left" id="btnImportExcel">
+                <i class="ph ph-upload-simple text-xl text-specBlue"></i> Importar Planilha
             </button>
         </nav>
 
@@ -231,6 +243,7 @@
     <button id="btnNewAppointmentMobile" class="admin-only lg:hidden fixed bottom-6 right-6 w-14 h-14 rounded-full bg-gradient-to-br from-specBlue via-specPurple to-specRed text-white shadow-atmospheric hover:scale-105 flex items-center justify-center active:scale-95 transition-transform z-[55]">
         <i class="ph ph-plus text-2xl"></i>
     </button>
+    <input type="file" id="excelImportInput" class="hidden" accept=".xlsx,.xls,.csv">
 
     <!-- Offcanvas Drawer -->
     <div id="drawerOverlay" class="fixed inset-0 bg-textMain/10 backdrop-blur-[10px] sm:backdrop-blur-[20px] z-[60] opacity-0 pointer-events-none transition-opacity duration-300"></div>
@@ -383,7 +396,8 @@
     <!-- Toast Container -->
     <div id="toastContainer" class="fixed top-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none"></div>
 
-    <script src="app.js?v=2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="app.js?v=14"></script>
 
 </body>
 </html>

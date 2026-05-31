@@ -222,6 +222,123 @@ input, select, textarea, button {
     color: #2d3335;
 }
 
+.progress-line {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.35rem;
+    align-items: start;
+}
+
+.progress-step-wrap {
+    position: relative;
+    min-width: 0;
+    display: flex;
+    justify-content: center;
+}
+
+.progress-connector {
+    position: absolute;
+    left: calc(-50% - 0.18rem);
+    right: calc(50% + 1.25rem);
+    top: 1.25rem;
+    height: 2px;
+    background: rgba(45, 51, 53, 0.12);
+    z-index: 0;
+}
+
+.progress-connector.completed {
+    background: #10b981;
+}
+
+.progress-step {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    min-height: 4.25rem;
+    border: none !important;
+    border-radius: 0;
+    padding: 0;
+    background: transparent !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.18rem;
+    font-weight: 800;
+    font-size: 0.62rem;
+    text-align: center;
+    color: #3b82f6;
+    transition: all 0.2s ease;
+}
+
+.progress-step:hover {
+    transform: translateY(-1px);
+    box-shadow: none;
+}
+
+.progress-step:disabled {
+    cursor: not-allowed;
+    transform: none;
+    opacity: 0.55;
+}
+
+.progress-step-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 999px;
+    background: #ffffff;
+    border: 2px solid rgba(59, 130, 246, 0.35);
+    color: #3b82f6;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.05rem;
+    line-height: 1;
+    box-shadow: 0 6px 14px rgba(59, 130, 246, 0.08);
+}
+
+.progress-step-icon.completed {
+    background: #10b981;
+    border-color: #10b981;
+    color: #ffffff;
+}
+
+.progress-step-label,
+.progress-step-time {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.progress-step-time {
+    font-size: 0.52rem;
+    font-weight: 700;
+    opacity: 0.78;
+}
+
+.absence-btn {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    min-height: 1.9rem;
+    padding: 0.35rem 0.65rem;
+    border-radius: 8px;
+    background: rgba(244, 63, 94, 0.08);
+    color: #f43f5e;
+    font-size: 0.68rem;
+    font-weight: 800;
+    transition: all 0.2s ease;
+}
+
+.absence-btn:hover,
+.absence-btn.active {
+    background: #f43f5e;
+    color: #ffffff;
+}
+
 /* --- Role Based Access Control --- */
 body.viewer-mode .admin-only {
     display: none !important;
@@ -333,7 +450,7 @@ body.viewer-mode .admin-only {
 
     #dashboardPanel > .grid {
         display: grid !important;
-        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
         gap: 0.35rem !important;
     }
 
@@ -343,11 +460,14 @@ body.viewer-mode .admin-only {
         border-radius: 8px !important;
     }
 
-    #dashboardPanel .dashboard-card:nth-child(5) {
-        display: none !important;
+    /* Card Total (1) - ocupa toda a largura */
+    #dashboardPanel .dashboard-card:nth-child(1) {
+        grid-column: 1 / -1;
     }
 
-    #dashboardPanel .dashboard-card:nth-child(4) {
+    /* Card Escolas (4) e Monitoras (5) - ocupam toda a largura */
+    #dashboardPanel .dashboard-card:nth-child(4),
+    #dashboardPanel .dashboard-card:nth-child(5) {
         grid-column: 1 / -1;
         min-height: 0;
     }
@@ -366,7 +486,8 @@ body.viewer-mode .admin-only {
         font-size: 0.9rem !important;
     }
 
-    #dashboardPanel #dashSchools {
+    #dashboardPanel #dashSchools,
+    #dashboardPanel #dashMonitors {
         max-height: none !important;
         overflow: visible !important;
         gap: 0.22rem !important;
@@ -441,6 +562,38 @@ body.viewer-mode .admin-only {
 
     .badge {
         padding: 0.18rem 0.36rem;
+        font-size: 0.58rem;
+    }
+
+    .progress-line {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 0.28rem;
+    }
+
+    .progress-connector {
+        display: none;
+    }
+
+    .progress-step {
+        min-height: 3.65rem;
+        padding: 0;
+        font-size: 0.55rem;
+        border-radius: 0;
+    }
+
+    .progress-step-icon {
+        width: 2.1rem;
+        height: 2.1rem;
+        font-size: 0.88rem;
+    }
+
+    .progress-step-time {
+        font-size: 0.48rem;
+    }
+
+    .absence-btn {
+        min-height: 2.1rem;
+        padding: 0.28rem 0.42rem;
         font-size: 0.58rem;
     }
 

@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', () => {
+﻿document.addEventListener('DOMContentLoaded', () => {
     // ---- DOM Elements ----
     const DOM = {
         agendaList: document.getElementById('agendaList'),
@@ -9,6 +9,11 @@ document.addEventListener('DOMContentLoaded', () => {
         btnCloseDrawer: document.getElementById('closeDrawer'),
         drawerTitle: document.getElementById('drawerTitle'),
         form: document.getElementById('appointmentForm'),
+        btnDownloadExcelTemplate: document.getElementById('btnDownloadExcelTemplate'),
+        btnDownloadExcelTemplateMobile: document.getElementById('btnDownloadExcelTemplateMobile'),
+        btnImportExcel: document.getElementById('btnImportExcel'),
+        btnImportExcelMobile: document.getElementById('btnImportExcelMobile'),
+        excelImportInput: document.getElementById('excelImportInput'),
         count: document.getElementById('appointmentCount'),
         countMobile: document.getElementById('appointmentCountMobile'),
         
@@ -56,7 +61,36 @@ document.addEventListener('DOMContentLoaded', () => {
         return sessionStorage.getItem('isAdmin') === 'true';
     }
 
-    const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
+    const fixTextEncoding = (value) => {
+        if (value === null || value === undefined) return '';
+        return String(value)
+            .replace(/ÃƒÂ§/g, 'ç')
+            .replace(/ÃƒÂ£/g, 'ã')
+            .replace(/ÃƒÂ¡/g, 'á')
+            .replace(/ÃƒÂ©/g, 'é')
+            .replace(/ÃƒÂª/g, 'ê')
+            .replace(/ÃƒÂ­/g, 'í')
+            .replace(/ÃƒÂ³/g, 'ó')
+            .replace(/ÃƒÂ´/g, 'ô')
+            .replace(/ÃƒÂº/g, 'ú')
+            .replace(/ÃƒÂ‡/g, 'Ç')
+            .replace(/Ã§/g, 'ç')
+            .replace(/Ã£/g, 'ã')
+            .replace(/Ã¡/g, 'á')
+            .replace(/Ã©/g, 'é')
+            .replace(/Ãª/g, 'ê')
+            .replace(/Ã­/g, 'í')
+            .replace(/Ã³/g, 'ó')
+            .replace(/Ã´/g, 'ô')
+            .replace(/Ãº/g, 'ú')
+            .replace(/Ã‡/g, 'Ç')
+            .replace(/Âº/g, 'º')
+            .replace(/Âª/g, 'ª')
+            .replace(/Â·/g, '·')
+            .replace(/Â/g, '');
+    };
+
+    const escapeHtml = (value) => fixTextEncoding(value).replace(/[&<>"']/g, (char) => ({
         '&': '&amp;',
         '<': '&lt;',
         '>': '&gt;',
@@ -154,18 +188,432 @@ document.addEventListener('DOMContentLoaded', () => {
         return `55${digits}`;
     };
 
+    const PROGRESS_STEPS = [
+        {
+            code: 'BUSCADO_ESCOLA',
+            label: 'Buscado na escola',
+            icon: 'ph-buildings',
+            gpsField: 'gpsBuscadoEscola',
+            timeField: 'timestampBuscadoEscola'
+        },
+        {
+            code: 'ENTREGUE_ONG',
+            label: 'Entregue na ONG',
+            icon: 'ph-house-line',
+            gpsField: 'gpsEntregueOng',
+            timeField: 'timestampEntregueOng'
+        },
+        {
+            code: 'SAIDA_ONG',
+            label: 'Saida da ONG',
+            icon: 'ph-sign-out',
+            gpsField: 'gpsSaidaOng',
+            timeField: 'timestampSaidaOng'
+        },
+        {
+            code: 'DEVOLVIDO_ESCOLA',
+            label: 'Devolvido na escola',
+            icon: 'ph-graduation-cap',
+            gpsField: 'gpsDevolvidoEscola',
+            timeField: 'timestampDevolvidoEscola'
+        }
+    ];
+
+    function getStatusParts(status) {
+        return String(status || '').split(',').map(part => part.trim()).filter(Boolean);
+    }
+
+    function normalizeTurnoLabel(value, inicioValue = '') {
+        const raw = fixTextEncoding(value)
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase();
+
+        if (raw.includes('tarde')) return 'Tarde';
+        if (raw.includes('manha') || raw.includes('manh')) return 'Manhã';
+
+        const hour = parseInt(String(inicioValue || '').split(':')[0], 10);
+        return hour >= 13 ? 'Tarde' : 'Manhã';
+    }
+
+    function getProgressStepsForTransport(transporte) {
+        if (transporte === 'Entrada') return PROGRESS_STEPS.slice(0, 2);
+        if (fixTextEncoding(transporte) === 'Saída') return PROGRESS_STEPS.slice(2);
+        return PROGRESS_STEPS;
+    }
+
+    function getProgressStep(code) {
+        return PROGRESS_STEPS.find(step => step.code === code);
+    }
+
+    function extractGpsCoordinates(gpsValue) {
+        const match = String(gpsValue || '').match(/(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/);
+        return match ? `${match[1]},${match[2]}` : '';
+    }
+
+    function getAnyGpsCoordinates(item) {
+        for (const step of PROGRESS_STEPS) {
+            const coords = extractGpsCoordinates(item[step.gpsField]);
+            if (coords) return coords;
+        }
+        return extractGpsCoordinates(item.ausenciaGps);
+    }
+
+    function buildMapUrl(coords) {
+        return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(coords)}`;
+    }
+
+    window.openGpsMap = (coords) => {
+        const cleanCoords = extractGpsCoordinates(coords);
+        if (!cleanCoords) {
+            showToast('Mapa indisponível: GPS não registrado para esta etapa.', 'error');
+            return false;
+        }
+
+        const mapUrl = buildMapUrl(cleanCoords);
+        window.open(mapUrl, '_blank');
+        return false;
+    };
+
     // ---- Init Filters ----
     const tzOffset = new Date().getTimezoneOffset() * 60000;
     const localISOTime = (new Date(Date.now() - tzOffset)).toISOString().slice(0, 10);
     if(DOM.fData) DOM.fData.value = localISOTime;
 
-    // ---- Data Management (Google Sheets API) ----
-    const API_URL = "https://script.google.com/macros/s/AKfycbw6Dza5i3iQajXG2xA87zd_tn84H5j0z7YMwuCGnG1rNsWbkJiK6DKl1I2Hx-vI4aepNg/exec";
+    // ---- Data Management (Supabase REST API) ----
+    const SUPABASE_URL = "https://ymgmlvrbydmxfnkeopra.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_iKPcSA5NVhhl--V35OP2cQ_ax2zvrob";
+    const SUPABASE_TABLES = {
+        appointments: 'appointments',
+        monitors: 'monitors'
+    };
     let appointments = [];
     const DEFAULT_MONITORAS = ["Vanessa", "Luciana", "Eliane", "Nenhuma"];
     let MONITORAS = parseJsonSafe(localStorage.getItem('lumina_monitoras'), null);
     if (!Array.isArray(MONITORAS) || MONITORAS.length === 0) {
         MONITORAS = [...DEFAULT_MONITORAS];
+    }
+
+    const supabaseHeaders = (extra = {}) => ({
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        ...extra
+    });
+
+    function buildSupabaseUrl(path) {
+        return `${SUPABASE_URL}/rest/v1/${path}`;
+    }
+
+    async function supabaseRequest(path, options = {}) {
+        const response = await fetch(buildSupabaseUrl(path), {
+            ...options,
+            headers: supabaseHeaders(options.headers || {})
+        });
+
+        const rawText = await response.text();
+        let result = null;
+        if (rawText) {
+            try {
+                result = JSON.parse(rawText);
+            } catch(e) {
+                result = rawText;
+            }
+        }
+
+        if (!response.ok) {
+            const message = result?.message || result?.hint || rawText || `Falha Supabase ${response.status}`;
+            throw new Error(message);
+        }
+
+        return result;
+    }
+
+    function formatSupabaseTime(value) {
+        if (!value) return '';
+        if (typeof value === 'string' && value.includes('T')) {
+            const d = new Date(value);
+            if (!isNaN(d)) return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+        }
+        return String(value).substring(0, 5);
+    }
+
+    function toSupabaseAppointment(item) {
+        const payload = {
+            id: String(item.id),
+            data: item.data || null,
+            profissional: fixTextEncoding(item.profissional),
+            tipo: fixTextEncoding(item.tipo),
+            paciente: fixTextEncoding(item.paciente),
+            dia: fixTextEncoding(item.dia),
+            turno: normalizeTurnoLabel(item.turno, item.inicio),
+            inicio: item.inicio || null,
+            termino: item.termino || null,
+            escola: fixTextEncoding(item.escola),
+            telefone: fixTextEncoding(item.telefone),
+            transporte: fixTextEncoding(item.transporte) || 'Ambos',
+            obs: fixTextEncoding(item.obs),
+            status: item.status || '',
+            monitora: fixTextEncoding(item.monitora),
+            gps_entrada: item.gpsEntrada || item.gps_entrada || '',
+            timestamp_entrada: item.timestampEntrada || item.timestamp_entrada || '',
+            gps_saida: item.gpsSaida || item.gps_saida || '',
+            timestamp_saida: item.timestampSaida || item.timestamp_saida || ''
+        };
+
+        const optionalColumns = [
+            ['gps_buscado_escola', item.gpsBuscadoEscola || item.gps_buscado_escola],
+            ['timestamp_buscado_escola', item.timestampBuscadoEscola || item.timestamp_buscado_escola],
+            ['gps_entregue_ong', item.gpsEntregueOng || item.gps_entregue_ong],
+            ['timestamp_entregue_ong', item.timestampEntregueOng || item.timestamp_entregue_ong],
+            ['gps_saida_ong', item.gpsSaidaOng || item.gps_saida_ong],
+            ['timestamp_saida_ong', item.timestampSaidaOng || item.timestamp_saida_ong],
+            ['gps_devolvido_escola', item.gpsDevolvidoEscola || item.gps_devolvido_escola],
+            ['timestamp_devolvido_escola', item.timestampDevolvidoEscola || item.timestamp_devolvido_escola],
+            ['ausencia_motivo', item.ausenciaMotivo || item.ausencia_motivo],
+            ['ausencia_timestamp', item.ausenciaTimestamp || item.ausencia_timestamp],
+            ['ausencia_gps', item.ausenciaGps || item.ausencia_gps]
+        ];
+
+        optionalColumns.forEach(([key, value]) => {
+            if (value) payload[key] = value;
+        });
+
+        return payload;
+    }
+
+    function toBaseSupabaseAppointment(item) {
+        return {
+            id: String(item.id),
+            data: item.data || null,
+            profissional: fixTextEncoding(item.profissional),
+            tipo: fixTextEncoding(item.tipo),
+            paciente: fixTextEncoding(item.paciente),
+            dia: fixTextEncoding(item.dia),
+            turno: normalizeTurnoLabel(item.turno, item.inicio),
+            inicio: item.inicio || null,
+            termino: item.termino || null,
+            escola: fixTextEncoding(item.escola),
+            telefone: fixTextEncoding(item.telefone),
+            transporte: fixTextEncoding(item.transporte) || 'Ambos',
+            obs: fixTextEncoding(item.obs),
+            status: item.status || '',
+            monitora: fixTextEncoding(item.monitora)
+        };
+    }
+
+    function isMissingSupabaseColumnError(error) {
+        return /column|schema cache|Could not find/i.test(error?.message || '');
+    }
+
+    function fromSupabaseAppointment(item) {
+        return {
+            id: item.id || '',
+            data: item.data || '',
+            profissional: fixTextEncoding(item.profissional),
+            tipo: fixTextEncoding(item.tipo),
+            paciente: fixTextEncoding(item.paciente),
+            dia: fixTextEncoding(item.dia),
+            turno: normalizeTurnoLabel(item.turno, item.inicio),
+            inicio: formatSupabaseTime(item.inicio),
+            termino: formatSupabaseTime(item.termino),
+            escola: fixTextEncoding(item.escola),
+            telefone: fixTextEncoding(item.telefone),
+            transporte: fixTextEncoding(item.transporte) || 'Ambos',
+            obs: fixTextEncoding(item.obs),
+            status: item.status || '',
+            monitora: fixTextEncoding(item.monitora),
+            gpsEntrada: item.gpsEntrada || item.gps_entrada || '',
+            timestampEntrada: item.timestampEntrada || item.timestamp_entrada || '',
+            gpsSaida: item.gpsSaida || item.gps_saida || '',
+            timestampSaida: item.timestampSaida || item.timestamp_saida || '',
+            gpsBuscadoEscola: item.gpsBuscadoEscola || item.gps_buscado_escola || '',
+            timestampBuscadoEscola: item.timestampBuscadoEscola || item.timestamp_buscado_escola || '',
+            gpsEntregueOng: item.gpsEntregueOng || item.gps_entregue_ong || '',
+            timestampEntregueOng: item.timestampEntregueOng || item.timestamp_entregue_ong || '',
+            gpsSaidaOng: item.gpsSaidaOng || item.gps_saida_ong || '',
+            timestampSaidaOng: item.timestampSaidaOng || item.timestamp_saida_ong || '',
+            gpsDevolvidoEscola: item.gpsDevolvidoEscola || item.gps_devolvido_escola || '',
+            timestampDevolvidoEscola: item.timestampDevolvidoEscola || item.timestamp_devolvido_escola || '',
+            ausenciaMotivo: item.ausenciaMotivo || item.ausencia_motivo || '',
+            ausenciaTimestamp: item.ausenciaTimestamp || item.ausencia_timestamp || '',
+            ausenciaGps: item.ausenciaGps || item.ausencia_gps || ''
+        };
+    }
+
+    async function supabaseCreateAppointments(records) {
+        if (!records.length) return [];
+        try {
+            return await supabaseRequest(`${SUPABASE_TABLES.appointments}`, {
+                method: 'POST',
+                headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+                body: JSON.stringify(records.map(toSupabaseAppointment))
+            });
+        } catch(e) {
+            if (!isMissingSupabaseColumnError(e)) throw e;
+            console.warn('Colunas extras ainda não existem no Supabase. Salvando campos básicos:', e.message);
+            return supabaseRequest(`${SUPABASE_TABLES.appointments}`, {
+                method: 'POST',
+                headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+                body: JSON.stringify(records.map(toBaseSupabaseAppointment))
+            });
+        }
+    }
+
+    async function supabaseUpdateAppointment(record) {
+        try {
+            return await supabaseRequest(`${SUPABASE_TABLES.appointments}?on_conflict=id`, {
+                method: 'POST',
+                headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+                body: JSON.stringify(toSupabaseAppointment(record))
+            });
+        } catch(e) {
+            if (!isMissingSupabaseColumnError(e)) throw e;
+            console.warn('Colunas extras ainda não existem no Supabase. Atualizando campos básicos:', e.message);
+            return supabaseRequest(`${SUPABASE_TABLES.appointments}?on_conflict=id`, {
+                method: 'POST',
+                headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+                body: JSON.stringify(toBaseSupabaseAppointment(record))
+            });
+        }
+    }
+
+    async function supabaseDeleteAppointment(id) {
+        return supabaseRequest(`${SUPABASE_TABLES.appointments}?id=eq.${encodeURIComponent(id)}`, {
+            method: 'DELETE',
+            headers: { Prefer: 'return=minimal' }
+        });
+    }
+
+    async function syncLocalCacheToSupabaseIfEmpty(cloudData) {
+        if (Array.isArray(cloudData) && cloudData.length > 0) return cloudData;
+
+        const cachedRecords = parseJsonSafe(localStorage.getItem('lumina_agenda_cache'), []);
+        if (!Array.isArray(cachedRecords) || cachedRecords.length === 0) return cloudData;
+
+        try {
+            await supabaseCreateAppointments(cachedRecords);
+            showToast(`${cachedRecords.length} agendamento(s) enviados ao Supabase.`);
+            return cachedRecords.map(fromSupabaseAppointment);
+        } catch(e) {
+            console.error('Erro ao enviar cache local ao Supabase:', e);
+            showToast(`Supabase recusou os dados: ${e.message}`, 'error');
+            return cloudData;
+        }
+    }
+
+    function getOccurrencesForSixMonths(startDateStr) {
+        if (!startDateStr) return [];
+        const [year, month, day] = startDateStr.split('-').map(Number);
+        const startDate = new Date(year, month - 1, day);
+        const targetDayOfWeek = startDate.getDay();
+        const endDate = new Date(year, month - 1 + 6, day);
+        const occurrences = [];
+        const currentDate = new Date(startDate);
+        while (currentDate <= endDate) {
+            if (currentDate.getDay() === targetDayOfWeek) {
+                const y = currentDate.getFullYear();
+                const m = String(currentDate.getMonth() + 1).padStart(2, '0');
+                const d = String(currentDate.getDate()).padStart(2, '0');
+                occurrences.push(`${y}-${m}-${d}`);
+            }
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+        return occurrences;
+    }
+
+    function checkAndRunMigration(legacyData) {
+        if (!Array.isArray(legacyData) || legacyData.length === 0) return legacyData;
+        
+        const getValSafe = (obj, keysArray) => {
+            for (const key of keysArray) {
+                if (obj[key] !== undefined && obj[key] !== null) return obj[key];
+            }
+            return '';
+        };
+
+        const needsMigration = legacyData.some(item => {
+            const hasData = getValSafe(item, ['data', 'Data']);
+            const hasDataInicio = getValSafe(item, ['dataInicio', 'datainicio', 'Data Início', 'Data Inicio', 'datainício']);
+            const hasExcecoes = getValSafe(item, ['excecoes', 'Exceções', 'exceções', 'excecoes']);
+            return !hasData && (hasDataInicio || hasExcecoes);
+        });
+        
+        if (!needsMigration) return legacyData;
+        
+        showToast("Migrando banco de dados para modelo Flat...", "success");
+        
+        const flatRecords = [];
+        legacyData.forEach(item => {
+            const hasData = getValSafe(item, ['data', 'Data']);
+            if (hasData) {
+                flatRecords.push(item);
+                return;
+            }
+            
+            const dataInicio = getValSafe(item, ['dataInicio', 'datainicio', 'Data Início', 'Data Inicio', 'datainício']);
+            if (!dataInicio) return;
+            
+            const occurrences = getOccurrencesForSixMonths(dataInicio);
+            const excecoesRaw = getValSafe(item, ['excecoes', 'Exceções', 'exceções', 'excecoes']);
+            const exc = parseJsonSafe(excecoesRaw, {});
+            
+            occurrences.forEach((dateStr, index) => {
+                const excForDay = exc[dateStr] || {};
+                let statusForDay = '';
+                let monitorForDay = '';
+                if (excForDay) {
+                    if (typeof excForDay === 'object') {
+                        statusForDay = excForDay.status || '';
+                        monitorForDay = excForDay.monitora || '';
+                    } else {
+                        statusForDay = excForDay;
+                    }
+                }
+                
+                flatRecords.push({
+                    id: `${getValSafe(item, ['id', 'ID']) || Date.now()}_flat_${dateStr}`,
+                    data: dateStr,
+                    profissional: getValSafe(item, ['profissional', 'Profissional']),
+                    tipo: getValSafe(item, ['tipo', 'Tipo', 'Atendimento']),
+                    paciente: getValSafe(item, ['paciente', 'Paciente']),
+                    dia: getWeekdayFromISO(dateStr),
+                    turno: normalizeTurnoLabel(getValSafe(item, ['turno', 'Turno']), getValSafe(item, ['inicio', 'Inicio', 'Início'])),
+                    inicio: getValSafe(item, ['inicio', 'Inicio', 'Início']),
+                    termino: getValSafe(item, ['termino', 'Termino', 'Término']),
+                    escola: getValSafe(item, ['escola', 'Escola', 'Instituição', 'instituicao']),
+                    telefone: getValSafe(item, ['telefone', 'Telefone']),
+                    transporte: getValSafe(item, ['transporte', 'Transporte']) || 'Ambos',
+                    obs: getValSafe(item, ['obs', 'Obs', 'Observações', 'observacoes']),
+                    status: statusForDay,
+                    monitora: monitorForDay,
+                    gpsEntrada: '',
+                    timestampEntrada: statusForDay.includes('ENTRADA') ? `${dateStr} 08:00:00 (Histórico)` : '',
+                    gpsSaida: '',
+                    timestampSaida: statusForDay.includes('SAIDA') ? `${dateStr} 12:00:00 (Histórico)` : ''
+                });
+            });
+        });
+        
+        if (flatRecords.length === 0) {
+            console.warn("Nenhum registro plano gerado durante a migração. Abortando escrita.");
+            return legacyData;
+        }
+
+        appointments = flatRecords;
+        localStorage.setItem('lumina_agenda_cache', JSON.stringify(flatRecords));
+        
+        supabaseCreateAppointments(flatRecords)
+        .then(result => {
+            console.log("Migração no Supabase concluída:", result);
+            showToast("Banco de dados migrado com sucesso!", "success");
+        })
+        .catch(e => {
+            console.error("Migration upload error:", e);
+            showToast("Erro ao sincronizar migração na Nuvem.", "error");
+        });
+        
+        return flatRecords;
     }
 
     async function loadData(silent = false) {
@@ -178,92 +626,325 @@ document.addEventListener('DOMContentLoaded', () => {
                     render();
                 } catch(e) {}
             }
-            DOM.agendaList.innerHTML = '<div class="py-12 flex flex-col items-center justify-center text-textMain/50 font-medium gap-4"><i class="ph ph-spinner-gap animate-spin text-4xl text-primaryStart"></i><div>Sincronizando com a Nuvem...</div></div>';
+            DOM.agendaList.innerHTML = '<div class="py-12 flex flex-col items-center justify-center text-textMain/50 font-medium gap-4"><i class="ph ph-spinner-gap animate-spin text-4xl text-primaryStart"></i><div>Sincronizando com o Supabase...</div></div>';
         }
-        
+
         try {
             if (!navigator.onLine) {
                 if (!silent) showToast('Você está offline. Exibindo dados em cache.', 'error');
                 return;
             }
-            const response = await fetch(API_URL + "?nocache=" + Date.now(), { cache: 'no-store' });
-            const data = await parseApiResponse(response);
-            
-            const formatTime = (val) => {
-                if (!val) return '';
-                if (typeof val === 'string' && val.includes('T')) {
-                    const d = new Date(val);
-                    if (!isNaN(d)) return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
-                }
-                return String(val).substring(0, 5);
-            };
 
-            if(!data.error) {
-                const newData = data.map(item => {
-                    let dInicio = item.dataInicio || item.datainicio || item['Data Início'] || item['Data Inicio'] || '';
-                    if (dInicio && typeof dInicio === 'string') {
-                        if (dInicio.includes('T')) {
-                            dInicio = dInicio.split('T')[0];
-                        } else if (dInicio.includes('/')) {
-                            const datePart = dInicio.split(' ')[0];
-                            const parts = datePart.split('/');
-                            if (parts.length === 3) {
-                                dInicio = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-                            }
-                        } else if (dInicio.includes(' ')) {
-                            dInicio = dInicio.split(' ')[0];
-                        }
-                    }
-                    return {
-                        ...item,
-                        dataInicio: dInicio,
-                        inicio: formatTime(item.inicio),
-                        termino: formatTime(item.termino)
-                    };
-                });
-                
-                if (silent) {
-                    if (JSON.stringify(appointments) !== JSON.stringify(newData)) {
-                        appointments = newData;
-                        localStorage.setItem('lumina_agenda_cache', JSON.stringify(newData));
-                        updateFilterOptions();
-                        render();
-                    }
-                } else {
+            const data = await supabaseRequest(`${SUPABASE_TABLES.appointments}?select=*&order=data.asc&order=inicio.asc&nocache=${Date.now()}`, {
+                method: 'GET'
+            });
+            const cloudOrSeededData = await syncLocalCacheToSupabaseIfEmpty(data);
+            const newData = Array.isArray(cloudOrSeededData) ? cloudOrSeededData.map(fromSupabaseAppointment) : [];
+
+            if (silent) {
+                if (JSON.stringify(appointments) !== JSON.stringify(newData)) {
                     appointments = newData;
                     localStorage.setItem('lumina_agenda_cache', JSON.stringify(newData));
                     updateFilterOptions();
                     render();
                 }
             } else {
-                if (!silent) {
-                    console.error("API Error:", data.error);
-                    appointments = [];
-                    updateFilterOptions();
+                appointments = newData;
+                localStorage.setItem('lumina_agenda_cache', JSON.stringify(newData));
+                updateFilterOptions();
+                render();
+            }
+        } catch(e) {
+            if (!silent) {
+                console.error('Supabase load error:', e);
+                DOM.agendaList.innerHTML = '<div class="py-12 text-center text-red-500 font-medium">Falha na conexão com o Supabase. Verifique a tabela e as políticas RLS.</div>';
+            }
+        }
+    }
+    async function loadMonitors() {
+        try {
+            const data = await supabaseRequest(`${SUPABASE_TABLES.monitors}?select=*&order=monitora.asc&nocache=${Date.now()}`, {
+                method: 'GET'
+            });
+            if (Array.isArray(data)) {
+                const names = data.map(m => m.monitora || m.Monitora || m.name).filter(Boolean);
+                if (names.length > 0) {
+                    MONITORAS = names;
+                    localStorage.setItem('lumina_monitoras', JSON.stringify(MONITORAS));
                     render();
                 }
             }
         } catch(e) {
-            if (!silent) {
-                console.error("Network Error:", e);
-                DOM.agendaList.innerHTML = '<div class="py-12 text-center text-red-500 font-medium">Falha na conexão com a Nuvem. Tente recarregar.</div>';
-            }
+            console.error('Error loading monitors from Supabase:', e);
         }
     }
+    function normalizeImportKey(value) {
+        return String(value || '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, '');
+    }
 
-    async function loadMonitors() {
-        try {
-            const response = await fetch(API_URL + "?sheet=monitors&nocache=" + Date.now());
-            const data = await parseApiResponse(response);
-            if (Array.isArray(data)) {
-                const names = data.map(m => m.monitora || m.Monitora || m.MONITORA).filter(Boolean);
-                if (names.length > 0) {
-                    MONITORAS = names;
-                    render(); 
-                }
+    function firstImportValue(row, aliases) {
+        for (const [key, value] of Object.entries(row)) {
+            if (aliases.includes(normalizeImportKey(key)) && value !== undefined && value !== null && String(value).trim() !== '') {
+                return value;
             }
-        } catch(e) {
-            console.error("Error loading monitors:", e);
+        }
+        return '';
+    }
+
+    function formatImportedDate(value) {
+        if (!value) return '';
+
+        if (typeof value === 'number' && window.XLSX?.SSF) {
+            const parsed = window.XLSX.SSF.parse_date_code(value);
+            if (parsed) {
+                return `${parsed.y}-${String(parsed.m).padStart(2, '0')}-${String(parsed.d).padStart(2, '0')}`;
+            }
+        }
+
+        if (value instanceof Date && !isNaN(value)) {
+            const y = value.getFullYear();
+            const m = String(value.getMonth() + 1).padStart(2, '0');
+            const d = String(value.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        const raw = String(value).trim();
+        if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+
+        const brMatch = raw.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+        if (brMatch) {
+            const day = brMatch[1].padStart(2, '0');
+            const month = brMatch[2].padStart(2, '0');
+            const year = brMatch[3].length === 2 ? `20${brMatch[3]}` : brMatch[3];
+            return `${year}-${month}-${day}`;
+        }
+
+        const parsedDate = new Date(raw);
+        if (!isNaN(parsedDate)) {
+            const y = parsedDate.getFullYear();
+            const m = String(parsedDate.getMonth() + 1).padStart(2, '0');
+            const d = String(parsedDate.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        return '';
+    }
+
+    function formatImportedTime(value) {
+        if (value === undefined || value === null || value === '') return '';
+
+        if (typeof value === 'number') {
+            const totalMinutes = Math.round((value % 1) * 24 * 60);
+            const hh = String(Math.floor(totalMinutes / 60)).padStart(2, '0');
+            const mm = String(totalMinutes % 60).padStart(2, '0');
+            return `${hh}:${mm}`;
+        }
+
+        if (value instanceof Date && !isNaN(value)) {
+            return `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}`;
+        }
+
+        const raw = String(value).trim();
+        const timeMatch = raw.match(/(\d{1,2})[:hH](\d{2})/);
+        if (timeMatch) {
+            return `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}`;
+        }
+
+        const hourOnly = raw.match(/^(\d{1,2})$/);
+        if (hourOnly) return `${hourOnly[1].padStart(2, '0')}:00`;
+
+        return raw.slice(0, 5);
+    }
+
+    function normalizeTurno(value, inicioValue) {
+        return normalizeTurnoLabel(value, inicioValue);
+    }
+
+    function normalizeTransporte(value) {
+        const raw = fixTextEncoding(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        if (raw.includes('entrada') && !raw.includes('saida')) return 'Entrada';
+        if (raw.includes('saida') && !raw.includes('entrada')) return 'Saída';
+        return 'Ambos';
+    }
+
+    const EXCEL_TEMPLATE_HEADERS = [
+        'Data Inicio',
+        'Profissional',
+        'Atendimento',
+        'Paciente',
+        'Hora Inicio',
+        'Hora Termino',
+        'Instituicao',
+        'Telefone',
+        'Transporte',
+        'Observacoes'
+    ];
+
+    function downloadBlob(content, filename, type) {
+        const blob = new Blob([content], { type });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+    }
+
+    function downloadExcelImportTemplate() {
+        if (!requireAdmin('baixar o modelo de importação')) return;
+
+        const filename = 'modelo-importacao-agendamentos.xlsx';
+        if (window.XLSX) {
+            const worksheet = window.XLSX.utils.aoa_to_sheet([EXCEL_TEMPLATE_HEADERS]);
+            worksheet['!cols'] = [
+                { wch: 14 },
+                { wch: 22 },
+                { wch: 22 },
+                { wch: 32 },
+                { wch: 12 },
+                { wch: 12 },
+                { wch: 28 },
+                { wch: 16 },
+                { wch: 16 },
+                { wch: 32 }
+            ];
+            const workbook = window.XLSX.utils.book_new();
+            window.XLSX.utils.book_append_sheet(workbook, worksheet, 'Agendamentos');
+            window.XLSX.writeFile(workbook, filename);
+        } else {
+            const csv = `${EXCEL_TEMPLATE_HEADERS.join(';')}\r\n`;
+            downloadBlob(csv, 'modelo-importacao-agendamentos.csv', 'text/csv;charset=utf-8');
+        }
+
+        showToast('Modelo baixado. Preencha apenas a primeira data do atendimento; o sistema criará 6 meses.');
+    }
+
+    function buildImportedAppointments(rows) {
+        const aliases = {
+            id: ['id', 'codigo'],
+            data: ['data', 'datadoatendimento', 'dataconsulta', 'dia'],
+            dataInicio: ['datainicio', 'inicioagenda', 'datainicial'],
+            profissional: ['profissional', 'terapeuta', 'responsavel'],
+            tipo: ['tipo', 'atendimento', 'especialidade', 'servico'],
+            paciente: ['paciente', 'aluno', 'crianca', 'nome', 'nomecompleto'],
+            turno: ['turno', 'periodo'],
+            inicio: ['horainicio', 'iniciohorario', 'horarioinicio', 'horario', 'entrada'],
+            termino: ['horatermino', 'termino', 'fim', 'horafim', 'saida'],
+            escola: ['escola', 'instituicao', 'unidade'],
+            telefone: ['telefone', 'celular', 'whatsapp', 'contato'],
+            transporte: ['transporte', 'trajeto'],
+            obs: ['obs', 'observacao', 'observacoes', 'nota', 'notas']
+        };
+
+        const importedRecords = [];
+        const skippedRows = [];
+
+        rows.forEach((row, rowIndex) => {
+            const inicio = formatImportedTime(firstImportValue(row, aliases.inicio));
+            const termino = formatImportedTime(firstImportValue(row, aliases.termino));
+            const paciente = String(firstImportValue(row, aliases.paciente) || '').trim();
+            const profissional = String(firstImportValue(row, aliases.profissional) || '').trim();
+            const tipo = String(firstImportValue(row, aliases.tipo) || '').trim();
+            const data = formatImportedDate(firstImportValue(row, aliases.data));
+            const dataInicio = formatImportedDate(firstImportValue(row, aliases.dataInicio));
+            const dates = data ? [data] : getOccurrencesForSixMonths(dataInicio);
+
+            if (!paciente || !inicio || dates.length === 0) {
+                skippedRows.push(rowIndex + 2);
+                return;
+            }
+
+            const sourceId = String(firstImportValue(row, aliases.id) || '').trim();
+            dates.forEach((dateStr, dateIndex) => {
+                const generatedId = `${Date.now()}_excel_${rowIndex}_${dateIndex}_${Math.random().toString(36).slice(2, 7)}`;
+                const recordId = sourceId && dates.length === 1 ? sourceId : generatedId;
+                importedRecords.push({
+                    id: recordId,
+                    data: dateStr,
+                    profissional,
+                    tipo,
+                    paciente,
+                    dia: getWeekdayFromISO(dateStr),
+                    turno: normalizeTurno(firstImportValue(row, aliases.turno), inicio),
+                    inicio,
+                    termino,
+                    escola: String(firstImportValue(row, aliases.escola) || '').trim(),
+                    telefone: String(firstImportValue(row, aliases.telefone) || '').trim(),
+                    transporte: normalizeTransporte(firstImportValue(row, aliases.transporte)),
+                    obs: String(firstImportValue(row, aliases.obs) || '').trim(),
+                    status: '',
+                    monitora: '',
+                    gpsEntrada: '',
+                    timestampEntrada: '',
+                    gpsSaida: '',
+                    timestampSaida: ''
+                });
+            });
+        });
+
+        return { importedRecords, skippedRows };
+    }
+
+    async function syncImportedAppointments(records) {
+        await supabaseCreateAppointments(records);
+    }
+
+    async function importAppointmentsFromExcel(file) {
+        if (!file) return;
+        if (!isAdmin()) {
+            showToast('Acesso negado. Faça login como coordenador.', 'error');
+            return;
+        }
+        if (!window.XLSX) {
+            showToast('Biblioteca de Excel não carregada. Verifique a conexão.', 'error');
+            return;
+        }
+
+        try {
+            showToast('Lendo planilha...', 'success');
+            const buffer = await file.arrayBuffer();
+            const workbook = window.XLSX.read(buffer, { type: 'array', cellDates: true });
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            const rows = window.XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+            if (rows.length === 0) {
+                showToast('A planilha está vazia.', 'error');
+                return;
+            }
+
+            const { importedRecords, skippedRows } = buildImportedAppointments(rows);
+            if (importedRecords.length === 0) {
+                showToast('Nenhum agendamento válido encontrado no Excel.', 'error');
+                return;
+            }
+
+            const confirmMessage = `${importedRecords.length} agendamento(s) serão importados.${skippedRows.length ? ` Linhas ignoradas: ${skippedRows.join(', ')}.` : ''} Continuar?`;
+            if (!confirm(confirmMessage)) return;
+
+            appointments.push(...importedRecords);
+            localStorage.setItem('lumina_agenda_cache', JSON.stringify(appointments));
+            updateFilterOptions();
+            render();
+
+            try {
+                await syncImportedAppointments(importedRecords);
+                showToast(`${importedRecords.length} agendamento(s) importados do Excel!`);
+            } catch (e) {
+                console.error('Erro ao sincronizar importação:', e);
+                showToast('Importado localmente, mas falhou ao sincronizar na nuvem.', 'error');
+            }
+        } catch (e) {
+            console.error('Erro ao importar Excel:', e);
+            showToast('Não foi possível importar este arquivo Excel.', 'error');
+        } finally {
+            if (DOM.excelImportInput) DOM.excelImportInput.value = '';
         }
     }
 
@@ -292,7 +973,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('formEscola').value = item.escola || '';
                 document.getElementById('formTelefone').value = item.telefone || '';
                 const tr = item.transporte;
-                const trVal = (tr === 'Entrada' || tr === 'Saída') ? tr : 'Ambos';
+                const trVal = (tr === 'Entrada' || fixTextEncoding(tr) === 'Saída') ? fixTextEncoding(tr) : 'Ambos';
                 if (document.getElementById('formTransporte')) document.getElementById('formTransporte').value = trVal;
                 document.getElementById('formObs').value = item.obs || '';
             }
@@ -343,6 +1024,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // ---- Events ----
     DOM.btnNew.addEventListener('click', () => openDrawer('create'));
     if (DOM.btnNewMobile) DOM.btnNewMobile.addEventListener('click', () => openDrawer('create'));
+    const openExcelImport = () => {
+        if (!requireAdmin('importar dados via Excel')) return;
+        DOM.excelImportInput?.click();
+    };
+    if (DOM.btnDownloadExcelTemplate) DOM.btnDownloadExcelTemplate.addEventListener('click', downloadExcelImportTemplate);
+    if (DOM.btnDownloadExcelTemplateMobile) DOM.btnDownloadExcelTemplateMobile.addEventListener('click', downloadExcelImportTemplate);
+    if (DOM.btnImportExcel) DOM.btnImportExcel.addEventListener('click', openExcelImport);
+    if (DOM.btnImportExcelMobile) DOM.btnImportExcelMobile.addEventListener('click', openExcelImport);
+    if (DOM.excelImportInput) {
+        DOM.excelImportInput.addEventListener('change', (event) => importAppointmentsFromExcel(event.target.files?.[0]));
+    }
     DOM.btnCloseDrawer.addEventListener('click', closeDrawer);
     DOM.drawerOverlay.addEventListener('click', closeDrawer);
 
@@ -368,11 +1060,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const originalText = submitBtn.innerHTML;
-        submitBtn.innerHTML = '<i class="ph ph-spinner-gap animate-spin text-xl inline-block mr-2"></i> Salvando na Planilha...';
-        submitBtn.disabled = true;
-
         const id = document.getElementById('formId').value;
+        const dataInicioVal = document.getElementById('formDataInicio') ? document.getElementById('formDataInicio').value : '';
         const inicioValue = document.getElementById('formInicio').value;
         const horaInicio = parseInt(inicioValue.split(':')[0], 10);
         let turnoCalculado = 'Manhã';
@@ -380,61 +1069,88 @@ document.addEventListener('DOMContentLoaded', () => {
             turnoCalculado = 'Tarde';
         }
 
-        const dataInicioVal = document.getElementById('formDataInicio') ? document.getElementById('formDataInicio').value : '';
-        let diaCalculado = '';
-        if (dataInicioVal) {
-            diaCalculado = getWeekdayFromISO(dataInicioVal);
-        }
-
-        const newRecord = {
-            id: id || Date.now().toString(),
-            profissional: document.getElementById('formProfissional').value,
-            tipo: document.getElementById('formTipo').value,
-            paciente: document.getElementById('formPaciente').value,
-            dia: diaCalculado,
-            dataInicio: dataInicioVal,
-            turno: turnoCalculado,
-            inicio: inicioValue,
-            termino: document.getElementById('formTermino').value,
-            escola: document.getElementById('formEscola').value,
-            telefone: document.getElementById('formTelefone').value,
-            transporte: document.getElementById('formTransporte') ? document.getElementById('formTransporte').value : 'Ambos',
-            obs: document.getElementById('formObs').value
-        };
-
-        const action = id ? 'UPDATE' : 'CREATE';
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<i class="ph ph-spinner-gap animate-spin text-xl inline-block mr-2"></i> Salvando...';
+        submitBtn.disabled = true;
 
         if (id) {
+            // Edição de um registro diário existente (UPDATE de linha única)
             const existing = appointments.find(a => String(a.id) === String(id));
-            if (existing && existing.excecoes) {
-                newRecord.excecoes = existing.excecoes;
-            }
-        }
+            const updatedRecord = {
+                ...existing,
+                profissional: document.getElementById('formProfissional').value,
+                tipo: document.getElementById('formTipo').value,
+                paciente: document.getElementById('formPaciente').value,
+                turno: turnoCalculado,
+                inicio: inicioValue,
+                termino: fTermino,
+                escola: document.getElementById('formEscola').value,
+                telefone: document.getElementById('formTelefone').value,
+                transporte: document.getElementById('formTransporte') ? document.getElementById('formTransporte').value : 'Ambos',
+                obs: document.getElementById('formObs').value
+            };
 
-        try {
-            const resp = await fetch(API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify({ action: action, data: newRecord })
-            });
-            await parseApiResponse(resp);
-            
-            if (id) {
-                const idx = appointments.findIndex(a => String(a.id) === String(id));
-                if(idx > -1) appointments[idx] = newRecord;
-            } else {
-                appointments.push(newRecord);
-            }
+            // Salvamento Otimista (local imediato)
+            const idx = appointments.findIndex(a => String(a.id) === String(id));
+            if(idx > -1) appointments[idx] = updatedRecord;
             localStorage.setItem('lumina_agenda_cache', JSON.stringify(appointments));
-            
             updateFilterOptions();
             render();
             closeDrawer();
-            showToast(id ? 'Agendamento atualizado!' : 'Agendamento criado!');
-        } catch(e) {
-            console.error(e);
-            showToast('Falha ao comunicar com o banco.', 'error');
-        } finally {
+            showToast('Agendamento atualizado!');
+
+            // Envio para Supabase em background
+            supabaseUpdateAppointment(updatedRecord).catch(err => console.error("Erro ao sincronizar update:", err));
+
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        } else {
+            // Criação automática das datas de ocorrências para os próximos 6 meses (CREATE_BATCH)
+            if (!dataInicioVal) {
+                showToast('Informe a data de início para os 6 meses.', 'error');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalText;
+                return;
+            }
+
+            const occurrences = getOccurrencesForSixMonths(dataInicioVal);
+            const batchRecords = occurrences.map((dateStr, index) => {
+                return {
+                    id: `${Date.now()}_flat_${index}_${Math.random().toString(36).substr(2, 5)}`,
+                    data: dateStr,
+                    profissional: document.getElementById('formProfissional').value,
+                    tipo: document.getElementById('formTipo').value,
+                    paciente: document.getElementById('formPaciente').value,
+                    dia: getWeekdayFromISO(dateStr),
+                    turno: turnoCalculado,
+                    inicio: inicioValue,
+                    termino: fTermino,
+                    escola: document.getElementById('formEscola').value,
+                    telefone: document.getElementById('formTelefone').value,
+                    transporte: document.getElementById('formTransporte') ? document.getElementById('formTransporte').value : 'Ambos',
+                    obs: document.getElementById('formObs').value,
+                    status: '',
+                    monitora: '',
+                    gpsEntrada: '',
+                    timestampEntrada: '',
+                    gpsSaida: '',
+                    timestampSaida: ''
+                };
+            });
+
+            // Salvamento Otimista (local imediato)
+            appointments.push(...batchRecords);
+            localStorage.setItem('lumina_agenda_cache', JSON.stringify(appointments));
+            updateFilterOptions();
+            render();
+            closeDrawer();
+            showToast(`${batchRecords.length} atendimentos cadastrados (6 meses)!`);
+
+            // Envio em lote em background
+            supabaseCreateAppointments(batchRecords)
+                .then(result => console.log("Batch inserido no Supabase:", result))
+                .catch(err => console.error("Erro ao inserir em lote:", err));
+
             submitBtn.innerHTML = originalText;
             submitBtn.disabled = false;
         }
@@ -449,12 +1165,7 @@ document.addEventListener('DOMContentLoaded', () => {
             DOM.agendaList.innerHTML = '<div class="py-12 flex flex-col items-center gap-2"><i class="ph ph-spinner-gap animate-spin text-2xl text-red-500"></i> Excluindo...</div>';
             
             try {
-                const response = await fetch(API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify({ action: 'DELETE', id: id })
-                });
-                await parseApiResponse(response);
+                await supabaseDeleteAppointment(id);
                 
                 appointments = appointments.filter(a => String(a.id) !== String(id));
                 localStorage.setItem('lumina_agenda_cache', JSON.stringify(appointments));
@@ -545,7 +1256,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (DOM.dashMorningCard) {
         DOM.dashMorningCard.addEventListener('click', () => {
-            if (DOM.fTurno) DOM.fTurno.value = DOM.fTurno.value === 'Manhã' ? '' : 'Manhã';
+            if (DOM.fTurno) DOM.fTurno.value = DOM.fTurno.value && normalizeTurnoLabel(DOM.fTurno.value) === 'Manhã' ? '' : 'Manhã';
             render();
         });
     }
@@ -626,24 +1337,20 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
-    function getFilteredAppointments({ ignoreTurno = false, ignoreEscola = false } = {}) {
-        const { dateRef, targetWeekday } = getDateFilterInfo();
+    function getFilteredAppointments({ ignoreTurno = false, ignoreEscola = false, ignoreMonitora = false } = {}) {
+        const { dateRef } = getDateFilterInfo();
 
         return appointments.filter(a => {
-            const dateMatch = !targetWeekday || a.dia === targetWeekday;
+            const dateMatch = !dateRef || a.data === dateRef;
             const pMatch = !DOM.fProf.value || a.profissional === DOM.fProf.value;
-            const tMatch = ignoreTurno || !DOM.fTurno.value || a.turno === DOM.fTurno.value;
+            const tMatch = ignoreTurno || !DOM.fTurno.value || normalizeTurnoLabel(a.turno, a.inicio) === normalizeTurnoLabel(DOM.fTurno.value);
             const eMatch = ignoreEscola || !DOM.fEscola.value || a.escola === DOM.fEscola.value;
+            const mMatch = ignoreMonitora || !a.monitora; // No monitora filter in top bar, so ignore this or always return true.
 
             const searchVal = DOM.fPaciente ? DOM.fPaciente.value.toLowerCase() : '';
             const pacienteMatch = !searchVal || (a.paciente && a.paciente.toLowerCase().includes(searchVal));
 
-            let started = true;
-            if (dateRef && a.dataInicio) {
-                if (dateRef < a.dataInicio) started = false;
-            }
-
-            return dateMatch && pMatch && tMatch && eMatch && started && pacienteMatch;
+            return dateMatch && pMatch && tMatch && eMatch && pacienteMatch;
         });
     }
 
@@ -652,29 +1359,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const { dateRef } = getDateFilterInfo();
 
-        const isCancelledFn = (item) => {
-            if (!dateRef) return false;
-            const exc = parseJsonSafe(item.excecoes, {});
-            const rawValue = exc[dateRef];
-            if (rawValue) {
-                return (typeof rawValue === 'object') ? rawValue.status === 'CANCELADO' : rawValue === 'CANCELADO';
-            }
-            return false;
-        };
-
         // Total: respeita todos os filtros ativos
-        const activeFiltered = filtered.filter(a => !isCancelledFn(a));
+        const activeFiltered = filtered.filter(a => a.status !== 'CANCELADO');
 
         // Manhã/Tarde: ignora filtro de turno mas respeita escola/profissional/busca
-        const byTurnoBase = getFilteredAppointments({ ignoreTurno: true }).filter(a => !isCancelledFn(a));
-        const morningCount = byTurnoBase.filter(a => a.turno === 'Manhã').length;
-        const afternoonCount = byTurnoBase.filter(a => a.turno === 'Tarde').length;
+        const byTurnoBase = getFilteredAppointments({ ignoreTurno: true }).filter(a => a.status !== 'CANCELADO');
+        const morningCount = byTurnoBase.filter(a => normalizeTurnoLabel(a.turno, a.inicio) === 'Manhã').length;
+        const afternoonCount = byTurnoBase.filter(a => normalizeTurnoLabel(a.turno, a.inicio) === 'Tarde').length;
 
         // Escolas: ignora filtro de escola, mas respeita turno/profissional/busca
-        const byEscolaBase = getFilteredAppointments({ ignoreEscola: true }).filter(a => !isCancelledFn(a));
+        const byEscolaBase = getFilteredAppointments({ ignoreEscola: true }).filter(a => a.status !== 'CANCELADO');
 
-        // Monitoras: resumo informativo, sem filtragem por monitora
-        const byMonitoraBase = filtered.filter(a => !isCancelledFn(a));
+        // Monitoras: resumo informativo completo
+        const byMonitoraBase = filtered.filter(a => a.status !== 'CANCELADO');
 
         DOM.dashTotal.textContent = activeFiltered.length;
         DOM.dashMorning.textContent = morningCount;
@@ -690,8 +1387,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }).format(labelDate);
         }
 
-        DOM.dashMorningCard?.classList.toggle('active', DOM.fTurno?.value === 'Manhã');
-        DOM.dashAfternoonCard?.classList.toggle('active', DOM.fTurno?.value === 'Tarde');
+        DOM.dashMorningCard?.classList.toggle('active', !!DOM.fTurno?.value && normalizeTurnoLabel(DOM.fTurno.value) === 'Manhã');
+        DOM.dashAfternoonCard?.classList.toggle('active', !!DOM.fTurno?.value && normalizeTurnoLabel(DOM.fTurno.value) === 'Tarde');
         DOM.dashTotalCard?.classList.toggle('active', !DOM.fTurno?.value && !DOM.fEscola?.value);
 
         // ---- Contagem de escolas ----
@@ -732,17 +1429,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // ---- Contagem de monitoras (lê exceções do dia) ----
+        // ---- Contagem de monitoras ----
         const monitorCounts = new Map();
         byMonitoraBase.forEach(item => {
-            const exc = parseJsonSafe(item.excecoes, {});
-            const rawValue = dateRef ? exc[dateRef] : null;
-            let todayMonitor = '';
-            if (rawValue && typeof rawValue === 'object') {
-                todayMonitor = rawValue.monitora || '';
-            }
-            // fallback: monitora padrão do agendamento
-            if (!todayMonitor) todayMonitor = item.monitora || '';
+            const todayMonitor = item.monitora || '';
             if (todayMonitor) {
                 monitorCounts.set(todayMonitor, (monitorCounts.get(todayMonitor) || 0) + 1);
             }
@@ -798,44 +1488,27 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         filtered.forEach(item => {
-            let exc = {};
-            exc = parseJsonSafe(item.excecoes, {});
-            const rawValue = dateRef ? exc[dateRef] : null;
-            let todayStatus = '';
-            let todayMonitor = '';
-
-            if (rawValue) {
-                if (typeof rawValue === 'object') {
-                    todayStatus = rawValue.status || '';
-                    todayMonitor = rawValue.monitora || '';
-                } else {
-                    todayStatus = rawValue;
-                }
-            }
+            const todayStatus = item.status || '';
+            const todayMonitor = item.monitora || '';
+            const statusParts = getStatusParts(todayStatus);
 
             const isCancelled = todayStatus === 'CANCELADO';
-            const isCompletedEntrada = todayStatus && todayStatus.includes('ENTRADA');
-            const isCompletedSaida = todayStatus && todayStatus.includes('SAIDA');
-            
             const cardOpacity = isCancelled ? 'opacity-40 grayscale' : '';
-            
-            const checkColorEntrada = isCompletedEntrada ? 'bg-specGreen text-white border-specGreen shadow-sm' : 'bg-surface border-textMain/10 text-textMain/40 hover:border-specGreen hover:text-specGreen';
-            const checkColorSaida = isCompletedSaida ? 'bg-specGreen text-white border-specGreen shadow-sm' : 'bg-surface border-textMain/10 text-textMain/40 hover:border-specGreen hover:text-specGreen';
-            const cancelColor = isCancelled ? 'bg-specRed text-white border-specRed shadow-sm' : 'bg-surface border-textMain/10 text-textMain/40 hover:border-specRed hover:text-specRed';
 
-            const pillClass = item.turno === 'Manhã' ? 'manha' : 'tarde';
+            const normalizedTurno = normalizeTurnoLabel(item.turno, item.inicio);
+            const pillClass = normalizedTurno === 'Manhã' ? 'manha' : 'tarde';
             const phone = normalizeWhatsappPhone(item.telefone);
             const wppLink = phone ? `https://wa.me/${phone}` : '#';
-            
+
             const trType = item.transporte;
-            const repEntrada = (trType === 'Entrada' || trType === 'Ambos' || trType === true || !trType);
-            const repSaida = (trType === 'Saída' || trType === 'Ambos' || trType === true || !trType);
+            const allowedProgressSteps = getProgressStepsForTransport(trType);
+            const completedProgressCount = allowedProgressSteps.filter(step => statusParts.includes(step.code)).length;
             const itemIdJs = escapeJsString(item.id);
             const patientNameText = item.paciente || 'Sem paciente';
             const patientNameHtml = escapeHtml(patientNameText);
             const profissionalHtml = escapeHtml(item.profissional || 'Sem profissional');
             const tipoHtml = escapeHtml(item.tipo || 'Sem atendimento');
-            const turnoHtml = escapeHtml(item.turno || '');
+            const turnoHtml = escapeHtml(normalizedTurno || '');
             const inicioHtml = escapeHtml(item.inicio || '--');
             const terminoHtml = escapeHtml(item.termino || '--');
             const diaHtml = escapeHtml(item.dia || '');
@@ -844,48 +1517,75 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let actionButtons = '';
             if (dateRef) {
-                let btnsHtml = '';
                 const pName = escapeJsString(patientNameText);
-                if (repEntrada) {
-                    btnsHtml += `
-                    <button class="flex-1 py-1.5 rounded-lg border-2 font-display font-bold text-[0.65rem] sm:text-[0.7rem] flex items-center justify-center gap-1 transition-all ${checkColorEntrada}" onclick="confirmStatusChange('${itemIdJs}', '${dateRef}', 'ENTRADA', '${pName}')">
-                        <i class="ph ${isCompletedEntrada ? 'ph-check-circle' : 'ph-sign-in'} text-base"></i> Entrada
-                    </button>`;
-                }
-                if (repSaida) {
-                    btnsHtml += `
-                    <button class="flex-1 py-1.5 rounded-lg border-2 font-display font-bold text-[0.65rem] sm:text-[0.7rem] flex items-center justify-center gap-1 transition-all ${checkColorSaida}" onclick="confirmStatusChange('${itemIdJs}', '${dateRef}', 'SAIDA', '${pName}')">
-                        <i class="ph ${isCompletedSaida ? 'ph-check-circle' : 'ph-sign-out'} text-base"></i> Saída
-                    </button>`;
-                }
-                btnsHtml += `
-                <button class="flex-1 py-1.5 rounded-lg border-2 font-display font-bold text-[0.65rem] sm:text-[0.7rem] flex items-center justify-center gap-1 transition-all ${cancelColor}" onclick="confirmStatusChange('${itemIdJs}', '${dateRef}', 'CANCELADO', '${pName}')">
-                    <i class="ph ${isCancelled ? 'ph-x-circle' : 'ph-x'} text-base"></i> Não irá
-                </button>`;
-
                 const monitorOptions = MONITORAS.map(m => `<option value="${escapeHtml(m)}" ${todayMonitor === m ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('');
+                const progressHtml = allowedProgressSteps.map((step, index) => {
+                    const completed = statusParts.includes(step.code);
+                    const timestamp = item[step.timeField] || '';
+                    const stepStateClass = completed
+                        ? 'bg-specGreen text-white border-specGreen shadow-sm'
+                        : 'bg-white text-specBlue border-specBlue/40 hover:border-specBlue hover:text-specBlue';
+                    const connectorClass = completed ? 'completed' : '';
+                    const disabledAttr = isCancelled ? 'disabled' : '';
+                    const title = timestamp ? `${step.label} - ${timestamp}` : step.label;
+
+                    return `
+                        <div class="progress-step-wrap">
+                            ${index > 0 ? `<span class="progress-connector ${connectorClass}"></span>` : ''}
+                            <button type="button" ${disabledAttr} data-step-code="${step.code}" title="${escapeHtml(title)}" class="progress-step ${stepStateClass}" onclick="event.preventDefault(); event.stopPropagation(); window.confirmProgressChange('${itemIdJs}', '${dateRef}', '${step.code}', '${pName}'); return false;">
+                                <span class="progress-step-icon ${completed ? 'completed' : ''}"><i class="ph ${completed ? 'ph-check' : step.icon}"></i></span>
+                                <span class="progress-step-label">${escapeHtml(step.label)}</span>
+                                ${timestamp ? `<span class="progress-step-time">${escapeHtml(timestamp)}</span>` : ''}
+                            </button>
+                        </div>`;
+                }).join('');
 
                 actionButtons = `
-                <div class="mt-1 pt-1.5 border-t border-textMain/5 flex flex-col gap-1.5 pointer-events-auto relative z-20">
+                <div class="mt-1 pt-1.5 border-t border-textMain/5 flex flex-col gap-2 pointer-events-auto relative z-20">
                     <div class="flex items-center gap-1.5">
                         <label class="text-[0.6rem] font-bold text-textMain/40 uppercase tracking-widest whitespace-nowrap">Monitora:</label>
                         <select class="flex-1 bg-surface border border-textMain/10 rounded-lg px-2 py-1 text-[0.7rem] font-medium outline-none" onchange="window.updateDailyMonitor('${itemIdJs}', '${dateRef}', this.value)">
                             <option value="">Selecionar...</option>
                             ${monitorOptions}
                         </select>
+                        <button type="button" class="absence-btn ${isCancelled ? 'active' : ''}" onclick="confirmAbsence('${itemIdJs}', '${dateRef}', '${pName}')" title="${isCancelled && item.ausenciaMotivo ? escapeHtml(item.ausenciaMotivo) : 'Registrar que o paciente não irá'}">
+                            <i class="ph ph-x-circle"></i> Não irá
+                        </button>
                     </div>
-                    <div class="flex gap-1.5">
-                        ${btnsHtml}
+                    <div class="progress-line" style="grid-template-columns: repeat(${allowedProgressSteps.length}, minmax(0, 1fr));" aria-label="Progresso do transporte">
+                        ${progressHtml}
                     </div>
                 </div>`;
             }
-            
+
             let fullyDone = false;
             if (isCancelled) fullyDone = true;
-            else if (repEntrada && repSaida) fullyDone = isCompletedEntrada && isCompletedSaida;
-            else if (repEntrada) fullyDone = isCompletedEntrada;
-            else if (repSaida) fullyDone = isCompletedSaida;
+            else fullyDone = allowedProgressSteps.length > 0 && allowedProgressSteps.every(step => statusParts.includes(step.code));
 
+            const progressAuditItems = allowedProgressSteps
+                .filter(step => item[step.timeField])
+                .map(step => {
+                    const gpsValue = item[step.gpsField] || '';
+                    let gpsLink = '';
+                    const coords = extractGpsCoordinates(gpsValue) || getAnyGpsCoordinates(item);
+                    if (coords) {
+                        gpsLink = `<button type="button" onclick="event.preventDefault(); event.stopPropagation(); return window.openGpsMap('${escapeJsString(coords)}');" class="text-specBlue hover:underline ml-1 inline-flex items-center gap-0.5"><i class="ph ph-map-pin text-xs"></i> Ver Mapa</button>`;
+                    }
+                    return `<div><span class="text-specGreen font-bold"><i class="ph ${step.icon}"></i> ${escapeHtml(step.label)}:</span> ${escapeHtml(item[step.timeField])} ${gpsLink}</div>`;
+                });
+
+            if (isCancelled && item.ausenciaMotivo) {
+                let ausenciaGpsLink = '';
+                const coords = extractGpsCoordinates(item.ausenciaGps) || getAnyGpsCoordinates(item);
+                if (coords) {
+                    ausenciaGpsLink = `<button type="button" onclick="event.preventDefault(); event.stopPropagation(); return window.openGpsMap('${escapeJsString(coords)}');" class="text-specBlue hover:underline ml-1 inline-flex items-center gap-0.5"><i class="ph ph-map-pin text-xs"></i> Ver Mapa</button>`;
+                }
+                progressAuditItems.push(`<div><span class="text-specRed font-bold"><i class="ph ph-x-circle"></i> Não irá:</span> ${escapeHtml(item.ausenciaMotivo)} <span class="text-textMain/45">${escapeHtml(item.ausenciaTimestamp || '')}</span> ${ausenciaGpsLink}</div>`);
+            }
+
+            const auditInfoHtml = progressAuditItems.length
+                ? `<div class="mt-1.5 px-2.5 py-2 bg-specBlue/5 border border-specBlue/10 rounded-xl flex flex-col gap-1.5 text-[0.65rem] text-textMain/75 font-semibold relative z-25 pointer-events-auto shadow-sm">${progressAuditItems.join('')}</div>`
+                : '';
             const card = document.createElement('div');
             card.className = 'agenda-card transition-all duration-300 ' + cardOpacity;
             card.dataset.id = item.id;
@@ -925,7 +1625,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                     <div class="detail-item">
                         <span class="detail-label">Data</span>
-                        <span class="detail-value"><i class="ph ph-calendar-blank text-textMain/50 text-base"></i> ${diaHtml}</span>
+                        <span class="detail-value"><i class="ph ph-calendar-blank text-textMain/50 text-base"></i> ${diaHtml} (${item.data})</span>
                     </div>
                     ${item.escola ? `
                     <div class="detail-item">
@@ -936,104 +1636,189 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 <div class="flex justify-between items-center mt-0.5 gap-2">
                     <div class="flex gap-1.5 flex-wrap">
-                        <span class="badge"><i class="ph ph-bus text-specGreen"></i> ${trType === 'Entrada' ? 'Somente Entrada' : (trType === 'Saída' ? 'Somente Saída' : 'Ida e Volta')}</span>
+                        <span class="badge"><i class="ph ph-bus text-specGreen"></i> ${trType === 'Entrada' ? 'Somente Entrada' : (fixTextEncoding(trType) === 'Saída' ? 'Somente Saída' : 'Ida e Volta')}</span>
                         ${item.obs ? `<span class="badge bg-specYellow/10 text-specYellow"><i class="ph ph-info"></i> ${obsHtml}</span>` : ''}
                     </div>
                     ${!isCancelled ? `<a href="${wppLink}" target="_blank" class="whatsapp-link relative z-20 pointer-events-auto"><i class="ph ph-whatsapp-logo text-xl"></i> Contatar</a>` : ''}
                 </div>
                 ${actionButtons}
+                ${auditInfoHtml}
             `;
             DOM.agendaList.appendChild(card);
         });
     }
 
     // ---- Date Specific Actions ----
-    window.confirmStatusChange = (id, dateStr, clickedStatus, patientName) => {
-        let actionLabel = '';
-        let icon = '';
-        let color = '';
-        
-        if (clickedStatus === 'ENTRADA') {
-            actionLabel = 'Confirmar entrada';
-            icon = 'ph-sign-in';
-            color = 'bg-specGreen/10 text-specGreen';
-        } else if (clickedStatus === 'SAIDA') {
-            actionLabel = 'Confirmar saída';
-            icon = 'ph-sign-out';
-            color = 'bg-specGreen/10 text-specGreen';
-        } else if (clickedStatus === 'CANCELADO') {
-            actionLabel = 'Confirmar falta (Não Irá)';
-            icon = 'ph-x-circle';
-            color = 'bg-specRed/10 text-specRed';
-        }
+    window.confirmProgressChange = (id, dateStr, stepCode, patientName) => {
+        const step = getProgressStep(stepCode);
+        if (!step) return;
 
         showConfirmationModal({
-            title: actionLabel,
-            message: `Deseja registrar esta ação para ${patientName}?`,
-            iconClass: icon,
-            colorClass: color,
-            onConfirm: () => window.toggleDailyStatus(id, dateStr, clickedStatus)
+            title: step.label,
+            message: `Deseja registrar "${step.label}" para ${patientName}? A localização, data e hora serão salvas.`,
+            iconClass: step.icon,
+            colorClass: 'bg-specGreen/10 text-specGreen',
+            onConfirm: () => window.toggleProgressStatus(id, dateStr, stepCode)
         });
     };
 
-    window.toggleDailyStatus = async (id, dateStr, clickedStatus) => {
+    window.toggleProgressStatus = async (id, dateStr, stepCode) => {
+        const step = getProgressStep(stepCode);
+        const itemIdx = appointments.findIndex(a => String(a.id) === String(id));
+        if (!step || itemIdx === -1) return;
+
+        const item = appointments[itemIdx];
+        const previousItem = { ...item };
+        let parts = getStatusParts(item.status).filter(part => part !== 'CANCELADO' && part !== 'ENTRADA' && part !== 'SAIDA');
+        const alreadyCompleted = parts.includes(stepCode);
+
+        if (alreadyCompleted) {
+            parts = parts.filter(part => part !== stepCode);
+            item[step.timeField] = '';
+            item[step.gpsField] = '';
+        } else {
+            parts.push(stepCode);
+        }
+
+        item.status = parts.join(',');
+        const formattedTimestamp = new Date().toLocaleString('pt-BR');
+
+        const applyGpsAndSave = async (lat = '', lng = '', accuracy = '') => {
+            if (!alreadyCompleted) {
+                item[step.timeField] = formattedTimestamp;
+                const fallbackCoords = getAnyGpsCoordinates(item);
+                if (lat && lng && extractGpsCoordinates(`${lat},${lng}`)) {
+                    item[step.gpsField] = `${lat},${lng} (Precisão: ${accuracy}m)`;
+                } else if (fallbackCoords) {
+                    item[step.gpsField] = `${fallbackCoords} (GPS anterior)`;
+                } else {
+                    item[step.gpsField] = 'Sem GPS';
+                }
+            }
+
+            localStorage.setItem('lumina_agenda_cache', JSON.stringify(appointments));
+            render();
+
+            try {
+                await supabaseUpdateAppointment(item);
+            } catch (e) {
+                console.error('Erro ao salvar progresso diário:', e);
+                appointments[itemIdx] = previousItem;
+                localStorage.setItem('lumina_agenda_cache', JSON.stringify(appointments));
+                render();
+                showToast(`Falha no Supabase: ${e.message}`, 'error');
+            }
+        };
+
+        if (!alreadyCompleted && navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const lat = position.coords.latitude.toFixed(6);
+                    const lng = position.coords.longitude.toFixed(6);
+                    const accuracy = position.coords.accuracy.toFixed(0);
+                    applyGpsAndSave(lat, lng, accuracy);
+                },
+                (error) => {
+                    console.warn('GPS indisponível ou recusado:', error.message);
+                    let label = 'GPS Indisponível';
+                    if (error.code === error.PERMISSION_DENIED) {
+                        label = 'GPS Não Autorizado';
+                    }
+                    applyGpsAndSave(label, label, '0');
+                },
+                { enableHighAccuracy: true, timeout: 6000 }
+            );
+        } else {
+            applyGpsAndSave();
+        }
+    };
+
+    window.confirmAbsence = async (id, dateStr, patientName) => {
         const itemIdx = appointments.findIndex(a => String(a.id) === String(id));
         if (itemIdx === -1) return;
-        
+
         const item = appointments[itemIdx];
-        const previousExcecoes = item.excecoes || '';
-        let exc = parseJsonSafe(item.excecoes, {});
-        
-        const rawValue = exc[dateStr];
-        let currentStatus = '';
-        let currentMonitor = '';
+        if (item.status === 'CANCELADO') {
+            if (!confirm(`Reverter ausência de ${patientName}?`)) return;
 
-        if (rawValue) {
-            if (typeof rawValue === 'object') {
-                currentStatus = rawValue.status || '';
-                currentMonitor = rawValue.monitora || '';
-            } else {
-                currentStatus = rawValue;
-            }
-        }
-        
-        let newStatus = currentStatus;
-        if (clickedStatus === 'CANCELADO') {
-            if (currentStatus === 'CANCELADO') newStatus = '';
-            else newStatus = 'CANCELADO';
-        } else {
-            if (currentStatus === 'CANCELADO') currentStatus = '';
-            let parts = currentStatus ? currentStatus.split(',') : [];
-            if (parts.includes(clickedStatus)) {
-                parts = parts.filter(p => p !== clickedStatus);
-            } else {
-                parts.push(clickedStatus);
-            }
-            newStatus = parts.join(',');
-        }
-
-        if (newStatus || currentMonitor) {
-            exc[dateStr] = { status: newStatus, monitora: currentMonitor };
-        } else {
-            delete exc[dateStr];
-        }
-        
-        item.excecoes = JSON.stringify(exc);
-        localStorage.setItem('lumina_agenda_cache', JSON.stringify(appointments));
-        render();
-        
-        try {
-            const response = await fetch(API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify({ action: 'UPDATE', data: item })
-            });
-            await parseApiResponse(response);
-        } catch (e) {
-            console.error(e);
-            item.excecoes = previousExcecoes;
+            const previousItem = { ...item };
+            item.status = '';
+            item.ausenciaMotivo = '';
+            item.ausenciaTimestamp = '';
+            item.ausenciaGps = '';
+            localStorage.setItem('lumina_agenda_cache', JSON.stringify(appointments));
             render();
-            alert('Não foi possível atualizar o status na nuvem.');
+
+            try {
+                await supabaseUpdateAppointment(item);
+                showToast('Ausência revertida.');
+            } catch(e) {
+                console.error('Erro ao reverter ausência:', e);
+                appointments[itemIdx] = previousItem;
+                localStorage.setItem('lumina_agenda_cache', JSON.stringify(appointments));
+                render();
+                showToast(`Falha no Supabase: ${e.message}`, 'error');
+            }
+            return;
+        }
+
+        const previousReason = item.ausenciaMotivo || '';
+        const reason = prompt(`Informe o motivo da ausência de ${patientName}:`, previousReason);
+        if (reason === null) return;
+
+        const trimmedReason = reason.trim();
+        if (!trimmedReason) {
+            showToast('Informe uma justificativa para registrar a ausência.', 'error');
+            return;
+        }
+
+        const previousItem = { ...item };
+        const parts = getStatusParts(item.status).filter(part => !PROGRESS_STEPS.some(step => step.code === part));
+        if (!parts.includes('CANCELADO')) parts.push('CANCELADO');
+
+        item.status = parts.join(',');
+        item.ausenciaMotivo = trimmedReason;
+        item.ausenciaTimestamp = new Date().toLocaleString('pt-BR');
+        PROGRESS_STEPS.forEach(step => {
+            item[step.timeField] = '';
+            item[step.gpsField] = '';
+        });
+
+        const saveAbsence = async (lat = '', lng = '', accuracy = '') => {
+            item.ausenciaGps = lat && lng ? `${lat},${lng} (Precisão: ${accuracy}m)` : 'Sem GPS';
+            localStorage.setItem('lumina_agenda_cache', JSON.stringify(appointments));
+            render();
+
+            try {
+                await supabaseUpdateAppointment(item);
+                showToast('Ausência registrada.');
+            } catch(e) {
+                console.error('Erro ao registrar ausência:', e);
+                appointments[itemIdx] = previousItem;
+                localStorage.setItem('lumina_agenda_cache', JSON.stringify(appointments));
+                render();
+                showToast(`Falha no Supabase: ${e.message}`, 'error');
+            }
+        };
+
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const lat = position.coords.latitude.toFixed(6);
+                    const lng = position.coords.longitude.toFixed(6);
+                    const accuracy = position.coords.accuracy.toFixed(0);
+                    saveAbsence(lat, lng, accuracy);
+                },
+                (error) => {
+                    console.warn('GPS indisponível ou recusado:', error.message);
+                    let label = 'GPS Indisponível';
+                    if (error.code === error.PERMISSION_DENIED) label = 'GPS Não Autorizado';
+                    saveAbsence(label, label, '0');
+                },
+                { enableHighAccuracy: true, timeout: 6000 }
+            );
+        } else {
+            saveAbsence();
         }
     };
 
@@ -1042,41 +1827,22 @@ document.addEventListener('DOMContentLoaded', () => {
         if (itemIdx === -1) return;
         
         const item = appointments[itemIdx];
-        const previousExcecoes = item.excecoes || '';
-        let exc = parseJsonSafe(item.excecoes, {});
+        const previousItem = { ...item };
         
-        const rawValue = exc[dateStr];
-        let currentStatus = '';
-
-        if (rawValue) {
-            if (typeof rawValue === 'object') {
-                currentStatus = rawValue.status || '';
-            } else {
-                currentStatus = rawValue;
-            }
-        }
-
-        if (monitorName || currentStatus) {
-            exc[dateStr] = { status: currentStatus, monitora: monitorName };
-        } else {
-            delete exc[dateStr];
-        }
+        item.monitora = monitorName;
         
-        item.excecoes = JSON.stringify(exc);
+        // OPTIMISTIC SAVE
         localStorage.setItem('lumina_agenda_cache', JSON.stringify(appointments));
-
+        render();
+        
         try {
-            const response = await fetch(API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify({ action: 'UPDATE', data: item })
-            });
-            await parseApiResponse(response);
+            await supabaseUpdateAppointment(item);
         } catch (e) {
-            console.error(e);
-            item.excecoes = previousExcecoes;
+            console.error("Erro ao salvar monitora:", e);
+            appointments[itemIdx] = previousItem;
+            localStorage.setItem('lumina_agenda_cache', JSON.stringify(appointments));
             render();
-            alert('Não foi possível atualizar a monitora na nuvem.');
+            showToast('Erro ao atualizar monitora na Nuvem.', 'error');
         }
     };
 
@@ -1128,28 +1894,15 @@ document.addEventListener('DOMContentLoaded', () => {
     window.removeMonitor = async (index) => {
         if (!requireAdmin('remover monitoras')) return;
         const monitorName = MONITORAS[index];
-        
+
         try {
-            const response = await fetch(API_URL + "?sheet=monitors");
-            const cloudData = await parseApiResponse(response);
-            const monitorEntry = cloudData.find(m => (m.monitora || m.Monitora || m.MONITORA) === monitorName);
-            
-            if (monitorEntry) {
-                const targetId = monitorEntry.id || monitorEntry.ID;
-                const deleteResponse = await fetch(API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify({ 
-                        action: 'DELETE', 
-                        sheet: 'monitors',
-                        id: targetId 
-                    })
-                });
-                await parseApiResponse(deleteResponse);
-            }
+            await supabaseRequest(`${SUPABASE_TABLES.monitors}?monitora=eq.${encodeURIComponent(monitorName)}`, {
+                method: 'DELETE',
+                headers: { Prefer: 'return=minimal' }
+            });
         } catch(e) {
             console.error(e);
-            alert('Não foi possível remover a monitora na nuvem.');
+            alert('Não foi possível remover a monitora no Supabase.');
             return;
         }
 
@@ -1163,21 +1916,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const name = newMonitorNameInput.value.trim();
         if (name && !MONITORAS.includes(name)) {
             const newId = Date.now().toString();
-            
+
             try {
-                const response = await fetch(API_URL, {
+                await supabaseRequest(`${SUPABASE_TABLES.monitors}`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify({ 
-                        action: 'CREATE', 
-                        sheet: 'monitors',
-                        data: { id: newId, monitora: name } 
-                    })
+                    headers: { Prefer: 'return=minimal' },
+                    body: JSON.stringify({ id: newId, monitora: name })
                 });
-                await parseApiResponse(response);
             } catch(e) {
                 console.error(e);
-                alert('Não foi possível adicionar a monitora na nuvem.');
+                alert('Não foi possível adicionar a monitora no Supabase.');
                 return;
             }
 
@@ -1187,7 +1935,6 @@ document.addEventListener('DOMContentLoaded', () => {
             syncMonitorsToCloud();
         }
     });
-
     if (btnManageMonitors) btnManageMonitors.addEventListener('click', openMonitorsModal);
     const btnManageMonitorsMobile = document.getElementById('btnManageMonitorsMobile');
     if (btnManageMonitorsMobile) btnManageMonitorsMobile.addEventListener('click', openMonitorsModal);
