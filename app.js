@@ -408,22 +408,18 @@
             timestamp_saida: item.timestampSaida || item.timestamp_saida || ''
         };
 
-        const optionalColumns = [
-            ['gps_buscado_escola', item.gpsBuscadoEscola || item.gps_buscado_escola],
-            ['timestamp_buscado_escola', item.timestampBuscadoEscola || item.timestamp_buscado_escola],
-            ['gps_entregue_ong', item.gpsEntregueOng || item.gps_entregue_ong],
-            ['timestamp_entregue_ong', item.timestampEntregueOng || item.timestamp_entregue_ong],
-            ['gps_saida_ong', item.gpsSaidaOng || item.gps_saida_ong],
-            ['timestamp_saida_ong', item.timestampSaidaOng || item.timestamp_saida_ong],
-            ['gps_devolvido_escola', item.gpsDevolvidoEscola || item.gps_devolvido_escola],
-            ['timestamp_devolvido_escola', item.timestampDevolvidoEscola || item.timestamp_devolvido_escola],
-            ['ausencia_motivo', item.ausenciaMotivo || item.ausencia_motivo],
-            ['ausencia_timestamp', item.ausenciaTimestamp || item.ausencia_timestamp],
-            ['ausencia_gps', item.ausenciaGps || item.ausencia_gps]
-        ];
-
-        optionalColumns.forEach(([key, value]) => {
-            if (value) payload[key] = value;
+        Object.assign(payload, {
+            gps_buscado_escola: item.gpsBuscadoEscola ?? item.gps_buscado_escola ?? '',
+            timestamp_buscado_escola: item.timestampBuscadoEscola ?? item.timestamp_buscado_escola ?? '',
+            gps_entregue_ong: item.gpsEntregueOng ?? item.gps_entregue_ong ?? '',
+            timestamp_entregue_ong: item.timestampEntregueOng ?? item.timestamp_entregue_ong ?? '',
+            gps_saida_ong: item.gpsSaidaOng ?? item.gps_saida_ong ?? '',
+            timestamp_saida_ong: item.timestampSaidaOng ?? item.timestamp_saida_ong ?? '',
+            gps_devolvido_escola: item.gpsDevolvidoEscola ?? item.gps_devolvido_escola ?? '',
+            timestamp_devolvido_escola: item.timestampDevolvidoEscola ?? item.timestamp_devolvido_escola ?? '',
+            ausencia_motivo: item.ausenciaMotivo ?? item.ausencia_motivo ?? '',
+            ausencia_timestamp: item.ausenciaTimestamp ?? item.ausencia_timestamp ?? '',
+            ausencia_gps: item.ausenciaGps ?? item.ausencia_gps ?? ''
         });
 
         return payload;
@@ -1767,12 +1763,16 @@
     window.confirmProgressChange = (id, dateStr, stepCode, patientName) => {
         const step = getProgressStep(stepCode);
         if (!step) return;
+        const item = appointments.find(a => String(a.id) === String(id));
+        const alreadyCompleted = item && getStatusParts(item.status).includes(stepCode);
 
         showConfirmationModal({
-            title: step.label,
-            message: `Deseja registrar "${step.label}" para ${patientName}? A localização, data e hora serão salvas.`,
-            iconClass: step.icon,
-            colorClass: 'bg-specGreen/10 text-specGreen',
+            title: alreadyCompleted ? `Reverter ${step.label}` : step.label,
+            message: alreadyCompleted
+                ? `Deseja reverter "${step.label}" para ${patientName}? A data, hora e GPS desta etapa serão apagados do Supabase.`
+                : `Deseja registrar "${step.label}" para ${patientName}? A localização, data e hora serão salvas.`,
+            iconClass: alreadyCompleted ? 'ph-arrow-counter-clockwise' : step.icon,
+            colorClass: alreadyCompleted ? 'bg-specRed/10 text-specRed' : 'bg-specGreen/10 text-specGreen',
             onConfirm: () => window.toggleProgressStatus(id, dateStr, stepCode)
         });
     };
@@ -1816,6 +1816,7 @@
 
             try {
                 await supabaseUpdateAppointment(item);
+                showToast(alreadyCompleted ? 'Etapa revertida e limpa na nuvem.' : 'Progresso registrado.');
             } catch (e) {
                 console.error('Erro ao salvar progresso diário:', e);
                 appointments[itemIdx] = previousItem;
