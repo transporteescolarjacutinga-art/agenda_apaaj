@@ -417,14 +417,22 @@ body.viewer-mode .admin-only {
         padding-bottom: 0 !important;
     }
 
+    #mainContainer > header > div:nth-child(2) > .relative:first-child,
+    #filterPaciente {
+        grid-column: span 1;
+    }
+
     #mainContainer > header > div:nth-child(2) > * {
         min-width: 0 !important;
         width: 100% !important;
     }
 
-    #filterTurno,
     #filterEscola {
         display: none !important;
+    }
+
+    #filterTurno {
+        display: block !important;
     }
 
     #filterDataRef,
@@ -560,18 +568,47 @@ body.viewer-mode .admin-only {
         border-radius: 7px;
     }
 
+    .monitor-action-row {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 0.32rem !important;
+        align-items: center !important;
+    }
+
+    .monitor-action-row label {
+        grid-column: 1 / -1;
+        font-size: 0.5rem !important;
+        letter-spacing: 0.08em !important;
+    }
+
+    .monitor-action-row select {
+        min-width: 0 !important;
+        width: 100% !important;
+    }
+
     .badge {
         padding: 0.18rem 0.36rem;
         font-size: 0.58rem;
     }
 
     .progress-line {
-        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-        gap: 0.28rem;
+        display: flex !important;
+        grid-template-columns: none !important;
+        gap: 0.2rem;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 0.15rem 0.05rem 0.25rem;
+        scroll-snap-type: x proximity;
+        -webkit-overflow-scrolling: touch;
     }
 
     .progress-connector {
         display: none;
+    }
+
+    .progress-step-wrap {
+        flex: 0 0 4.7rem;
+        scroll-snap-align: start;
     }
 
     .progress-step {
@@ -595,6 +632,8 @@ body.viewer-mode .admin-only {
         min-height: 2.1rem;
         padding: 0.28rem 0.42rem;
         font-size: 0.58rem;
+        white-space: nowrap;
+        max-width: 4.8rem;
     }
 
     .btn-icon {

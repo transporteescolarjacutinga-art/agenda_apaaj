@@ -1549,7 +1549,7 @@
 
                 actionButtons = `
                 <div class="mt-1 pt-1.5 border-t border-textMain/5 flex flex-col gap-2 pointer-events-auto relative z-20">
-                    <div class="flex items-center gap-1.5">
+                    <div class="monitor-action-row flex items-center gap-1.5">
                         <label class="text-[0.6rem] font-bold text-textMain/40 uppercase tracking-widest whitespace-nowrap">Monitora:</label>
                         <select class="flex-1 bg-surface border border-textMain/10 rounded-lg px-2 py-1 text-[0.7rem] font-medium outline-none" onchange="window.updateDailyMonitor('${itemIdJs}', '${dateRef}', this.value)">
                             <option value="">Selecionar...</option>
