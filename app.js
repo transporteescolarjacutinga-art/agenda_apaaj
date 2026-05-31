@@ -233,7 +233,8 @@
         if (raw.includes('manha') || raw.includes('manh')) return 'Manhã';
 
         const hour = parseInt(String(inicioValue || '').split(':')[0], 10);
-        return hour >= 13 ? 'Tarde' : 'Manhã';
+        if (!Number.isNaN(hour)) return hour >= 13 ? 'Tarde' : 'Manhã';
+        return '';
     }
 
     function getProgressStepsForTransport(transporte) {
@@ -1195,9 +1196,21 @@
         openDrawer('edit', id);
     };
 
+    function handleFilterChange(event) {
+        if (event?.currentTarget === DOM.fTurno) {
+            const normalizedTurno = normalizeTurnoLabel(DOM.fTurno.value);
+            DOM.fTurno.value = normalizedTurno || '';
+        }
+        render();
+    }
+
     [DOM.fData, DOM.fProf, DOM.fTurno, DOM.fEscola].forEach(el => {
-        if(el) el.addEventListener('change', render);
+        if (el) el.addEventListener('change', handleFilterChange);
     });
+
+    if (DOM.fTurno) {
+        DOM.fTurno.addEventListener('input', handleFilterChange);
+    }
 
     const btnPrint = document.getElementById('btnPrint');
     if (btnPrint) {
@@ -1263,14 +1276,18 @@
 
     if (DOM.dashMorningCard) {
         DOM.dashMorningCard.addEventListener('click', () => {
-            if (DOM.fTurno) DOM.fTurno.value = DOM.fTurno.value && normalizeTurnoLabel(DOM.fTurno.value) === 'Manhã' ? '' : 'Manhã';
+            if (DOM.fTurno) {
+                DOM.fTurno.value = normalizeTurnoLabel(DOM.fTurno.value) === 'Manhã' ? '' : 'Manhã';
+            }
             render();
         });
     }
 
     if (DOM.dashAfternoonCard) {
         DOM.dashAfternoonCard.addEventListener('click', () => {
-            if (DOM.fTurno) DOM.fTurno.value = DOM.fTurno.value === 'Tarde' ? '' : 'Tarde';
+            if (DOM.fTurno) {
+                DOM.fTurno.value = normalizeTurnoLabel(DOM.fTurno.value) === 'Tarde' ? '' : 'Tarde';
+            }
             render();
         });
     }
@@ -1346,11 +1363,12 @@
 
     function getFilteredAppointments({ ignoreTurno = false, ignoreEscola = false, ignoreMonitora = false } = {}) {
         const { dateRef } = getDateFilterInfo();
+        const selectedTurno = normalizeTurnoLabel(DOM.fTurno?.value || '');
 
         return appointments.filter(a => {
             const dateMatch = !dateRef || a.data === dateRef;
             const pMatch = !DOM.fProf.value || a.profissional === DOM.fProf.value;
-            const tMatch = ignoreTurno || !DOM.fTurno.value || normalizeTurnoLabel(a.turno, a.inicio) === normalizeTurnoLabel(DOM.fTurno.value);
+            const tMatch = ignoreTurno || !selectedTurno || normalizeTurnoLabel(a.turno, a.inicio) === selectedTurno;
             const eMatch = ignoreEscola || !DOM.fEscola.value || a.escola === DOM.fEscola.value;
             const mMatch = ignoreMonitora || !a.monitora; // No monitora filter in top bar, so ignore this or always return true.
 
