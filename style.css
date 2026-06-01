@@ -343,7 +343,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .drawer-head button, .modal-head button { width: var(--tap); height: var(--tap); border-radius: 12px; background: var(--soft); }
 .drawer-form { flex: 1; overflow: auto; padding: 18px; display: grid; gap: 14px; }
 .drawer-form label { display: grid; gap: 6px; color: var(--muted); font-size: .72rem; font-weight: 800; text-transform: uppercase; }
-.drawer-form input, .drawer-form select, .inline-form input { height: var(--tap); border-radius: 12px; background: var(--soft); color: var(--text); padding: 0 12px; text-transform: none; }
+.drawer-form input, .drawer-form select, .inline-form input, .report-form input { height: var(--tap); border-radius: 12px; background: var(--soft); color: var(--text); padding: 0 12px; text-transform: none; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .save-button, #btnAddMonitor, #btnConfirmOk, #btnConfirmCancel { min-height: var(--tap); border-radius: 12px; padding: 0 16px; font-weight: 800; }
 .save-button, #btnConfirmOk { background: var(--blue); color: #fff; }
@@ -355,6 +355,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .confirm-icon { width: 60px; height: 60px; margin: 0 auto 10px; border-radius: 18px; background: #eaf1ff; color: var(--blue); display: grid; place-items: center; font-size: 1.8rem; }
 .confirm-actions, .inline-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .monitors-list { max-height: 310px; overflow: auto; display: grid; gap: 8px; margin: 14px 0; }
+.report-form { display: grid; gap: 12px; margin-top: 14px; }
+.report-form label { display: grid; gap: 6px; color: var(--muted); font-size: .72rem; font-weight: 800; text-transform: uppercase; }
 .toast-container { position: fixed; top: 14px; right: 14px; z-index: 200; display: grid; gap: 8px; pointer-events: none; }
 .toast-container > * {
     pointer-events: auto;

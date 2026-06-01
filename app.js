@@ -13,6 +13,8 @@
         btnDownloadExcelTemplateMobile: document.getElementById('btnDownloadExcelTemplateMobile'),
         btnImportExcel: document.getElementById('btnImportExcel'),
         btnImportExcelMobile: document.getElementById('btnImportExcelMobile'),
+        btnReport: document.getElementById('btnReport'),
+        btnReportMobile: document.getElementById('btnReportMobile'),
         excelImportInput: document.getElementById('excelImportInput'),
         count: document.getElementById('appointmentCount'),
         countMobile: document.getElementById('appointmentCountMobile'),
@@ -27,6 +29,11 @@
         confirmModalOverlay: document.getElementById('confirmModalOverlay'),
         btnConfirmOk: document.getElementById('btnConfirmOk'),
         btnConfirmCancel: document.getElementById('btnConfirmCancel'),
+        reportModalOverlay: document.getElementById('reportModalOverlay'),
+        reportStartDate: document.getElementById('reportStartDate'),
+        reportEndDate: document.getElementById('reportEndDate'),
+        btnCloseReport: document.getElementById('btnCloseReport'),
+        btnGenerateReport: document.getElementById('btnGenerateReport'),
 
         dashTotal: document.getElementById('dashTotal'),
         dashMorning: document.getElementById('dashMorning'),
@@ -300,6 +307,22 @@
 
     function buildMapUrl(coords) {
         return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(coords)}`;
+    }
+
+    function getStepAudit(item) {
+        return PROGRESS_STEPS
+            .filter(step => item[step.timeField] || item[step.gpsField])
+            .map(step => {
+                const gps = item[step.gpsField] || '';
+                const coords = extractGpsCoordinates(gps);
+                return {
+                    label: step.label,
+                    timestamp: item[step.timeField] || '',
+                    gps,
+                    coords,
+                    mapUrl: coords ? buildMapUrl(coords) : ''
+                };
+            });
     }
 
     window.openGpsMap = (coords) => {
@@ -1101,6 +1124,157 @@
     }
     DOM.btnCloseDrawer.addEventListener('click', closeDrawer);
     DOM.drawerOverlay.addEventListener('click', closeDrawer);
+
+    function openReportModal() {
+        if (!requireAdmin('gerar relatórios')) return;
+        const selectedDate = DOM.fData?.value || localISOTime;
+        if (DOM.reportStartDate) DOM.reportStartDate.value = selectedDate;
+        if (DOM.reportEndDate) DOM.reportEndDate.value = selectedDate;
+        DOM.reportModalOverlay?.classList.add('active');
+    }
+
+    function closeReportModal() {
+        DOM.reportModalOverlay?.classList.remove('active');
+    }
+
+    function buildReportHtml(startDate, endDate, records) {
+        const generatedAt = new Date().toLocaleString('pt-BR');
+        const periodLabel = `${formatDateBR(startDate)} a ${formatDateBR(endDate)}`;
+        const rowsHtml = records.map(item => {
+            const statusParts = getStatusParts(item.status);
+            const auditRows = getStepAudit(item).map(audit => `
+                <div class="audit-line">
+                    <strong>${escapeHtml(audit.label)}</strong>
+                    <span>Data/hora: ${escapeHtml(audit.timestamp || 'Não registrado')}</span>
+                    <span>GPS: ${escapeHtml(audit.gps || 'Não registrado')}</span>
+                    ${audit.mapUrl ? `<a href="${audit.mapUrl}" target="_blank">Ver mapa</a>` : '<span>Mapa: indisponível</span>'}
+                </div>
+            `).join('');
+            const absenceHtml = statusParts.includes('CANCELADO') ? `
+                <div class="absence-line">
+                    <strong>Ausência</strong>
+                    <span>Justificativa: ${escapeHtml(item.ausenciaMotivo || 'Não informada')}</span>
+                    <span>Data/hora: ${escapeHtml(item.ausenciaTimestamp || 'Não registrada')}</span>
+                    <span>GPS: ${escapeHtml(item.ausenciaGps || 'Não registrado')}</span>
+                    ${extractGpsCoordinates(item.ausenciaGps) ? `<a href="${buildMapUrl(extractGpsCoordinates(item.ausenciaGps))}" target="_blank">Ver mapa</a>` : '<span>Mapa: indisponível</span>'}
+                </div>
+            ` : '';
+
+            return `
+                <article class="report-card">
+                    <header>
+                        <div>
+                            <h2>${escapeHtml(item.paciente || 'Sem paciente')}</h2>
+                            <p>${escapeHtml(item.profissional || 'Sem profissional')} &bull; ${escapeHtml(item.tipo || 'Sem atendimento')}</p>
+                        </div>
+                        <div class="date-box">
+                            <strong>${escapeHtml(formatDateBR(item.data))}</strong>
+                            <span>${escapeHtml(item.inicio || '--')} às ${escapeHtml(item.termino || '--')}</span>
+                        </div>
+                    </header>
+                    <div class="meta-grid">
+                        <span><strong>Dia:</strong> ${escapeHtml(item.dia || getWeekdayFromISO(item.data))}</span>
+                        <span><strong>Turno:</strong> ${escapeHtml(normalizeTurnoLabel(item.turno, item.inicio))}</span>
+                        <span><strong>Instituição:</strong> ${escapeHtml(item.escola || 'Não informada')}</span>
+                        <span><strong>Transporte:</strong> ${escapeHtml(item.transporte || 'Ambos')}</span>
+                        <span><strong>Monitora:</strong> ${escapeHtml(item.monitora || 'Não informada')}</span>
+                        <span><strong>Status:</strong> ${escapeHtml(item.status || 'Sem progresso')}</span>
+                    </div>
+                    <section class="audit-section">
+                        <h3>Auditoria de transporte</h3>
+                        ${auditRows || '<p class="empty">Nenhum progresso registrado.</p>'}
+                        ${absenceHtml}
+                    </section>
+                </article>
+            `;
+        }).join('');
+
+        return `<!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+            <meta charset="UTF-8">
+            <title>Relatório de atendimentos - ${periodLabel}</title>
+            <style>
+                * { box-sizing: border-box; }
+                body { margin: 0; padding: 24px; font-family: Arial, sans-serif; color: #111827; background: #f8fafc; }
+                .report-header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 18px; border-bottom: 2px solid #dbe3ef; padding-bottom: 14px; }
+                h1 { margin: 0 0 6px; font-size: 22px; }
+                .report-header p { margin: 2px 0; color: #475569; font-size: 12px; }
+                .print-button { min-height: 38px; padding: 0 14px; border: 0; border-radius: 8px; background: #2563eb; color: white; font-weight: 700; cursor: pointer; }
+                .summary { margin-bottom: 14px; padding: 10px 12px; border-radius: 10px; background: #eaf1ff; font-size: 13px; font-weight: 700; }
+                .report-card { break-inside: avoid; margin-bottom: 12px; padding: 14px; border: 1px solid #dbe3ef; border-radius: 12px; background: white; }
+                .report-card header { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid #eef2f7; padding-bottom: 10px; }
+                h2 { margin: 0 0 4px; font-size: 16px; }
+                h3 { margin: 12px 0 8px; font-size: 13px; }
+                .report-card p { margin: 0; color: #475569; font-size: 12px; }
+                .date-box { text-align: right; font-size: 12px; white-space: nowrap; }
+                .date-box strong, .date-box span { display: block; }
+                .meta-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; margin-top: 10px; font-size: 12px; }
+                .audit-line, .absence-line { display: grid; grid-template-columns: 1fr; gap: 3px; margin: 6px 0; padding: 8px; border-radius: 8px; background: #f8fafc; font-size: 11px; }
+                .absence-line { background: #fff1f2; }
+                a { color: #2563eb; font-weight: 700; text-decoration: none; }
+                .empty { color: #64748b; font-size: 11px; }
+                @media print {
+                    body { padding: 0; background: white; }
+                    .print-button { display: none; }
+                    .report-card { border-color: #cbd5e1; }
+                }
+            </style>
+        </head>
+        <body>
+            <header class="report-header">
+                <div>
+                    <h1>Relatório de atendimentos</h1>
+                    <p>Período: ${periodLabel}</p>
+                    <p>Gerado em: ${escapeHtml(generatedAt)}</p>
+                </div>
+                <button class="print-button" onclick="window.print()">Salvar como PDF</button>
+            </header>
+            <div class="summary">Total de atendimentos no período: ${records.length}</div>
+            ${rowsHtml || '<p>Nenhum atendimento encontrado para o período selecionado.</p>'}
+            <script>setTimeout(() => window.print(), 500);<\/script>
+        </body>
+        </html>`;
+    }
+
+    function generateAttendanceReport() {
+        if (!requireAdmin('gerar relatórios')) return;
+        const startDate = DOM.reportStartDate?.value;
+        const endDate = DOM.reportEndDate?.value;
+        if (!startDate || !endDate) {
+            showToast('Informe data inicial e final.', 'error');
+            return;
+        }
+        if (startDate > endDate) {
+            showToast('A data inicial não pode ser maior que a final.', 'error');
+            return;
+        }
+
+        const records = appointments
+            .filter(item => item.data >= startDate && item.data <= endDate)
+            .sort((a, b) => (a.data || '').localeCompare(b.data || '') || (a.inicio || '').localeCompare(b.inicio || '') || (a.paciente || '').localeCompare(b.paciente || ''));
+
+        const reportWindow = window.open('', '_blank');
+        if (!reportWindow) {
+            showToast('Permita pop-ups para gerar o relatório em PDF.', 'error');
+            return;
+        }
+
+        reportWindow.document.open();
+        reportWindow.document.write(buildReportHtml(startDate, endDate, records));
+        reportWindow.document.close();
+        closeReportModal();
+    }
+
+    if (DOM.btnReport) DOM.btnReport.addEventListener('click', openReportModal);
+    if (DOM.btnReportMobile) DOM.btnReportMobile.addEventListener('click', openReportModal);
+    if (DOM.btnCloseReport) DOM.btnCloseReport.addEventListener('click', closeReportModal);
+    if (DOM.btnGenerateReport) DOM.btnGenerateReport.addEventListener('click', generateAttendanceReport);
+    if (DOM.reportModalOverlay) {
+        DOM.reportModalOverlay.addEventListener('click', (e) => {
+            if (e.target.id === 'reportModalOverlay') closeReportModal();
+        });
+    }
 
     DOM.form.addEventListener('submit', async (e) => {
         e.preventDefault();

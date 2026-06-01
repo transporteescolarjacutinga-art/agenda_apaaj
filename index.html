@@ -11,7 +11,7 @@
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#f6f7fb">
     <link rel="apple-touch-icon" href="logo-ong.png">
-    <link rel="stylesheet" href="style.css?v=25">
+    <link rel="stylesheet" href="style.css?v=26">
 </head>
 <body class="viewer-mode">
     <aside class="app-sidebar">
@@ -29,6 +29,7 @@
             <button id="btnManageMonitorsMobile" class="admin-only" title="Monitoras"><i class="ph ph-users-three"></i></button>
             <button id="btnDownloadExcelTemplateMobile" class="admin-only" title="Modelo Excel"><i class="ph ph-file-xls"></i></button>
             <button id="btnImportExcelMobile" class="admin-only" title="Importar"><i class="ph ph-upload-simple"></i></button>
+            <button id="btnReportMobile" class="admin-only" title="Relatório PDF"><i class="ph ph-file-pdf"></i></button>
         </div>
 
         <nav class="desktop-nav">
@@ -36,6 +37,7 @@
             <button id="btnManageMonitors" class="admin-only"><i class="ph ph-users-three"></i> Monitoras</button>
             <button id="btnDownloadExcelTemplate" class="admin-only"><i class="ph ph-file-xls"></i> Modelo Excel</button>
             <button id="btnImportExcel" class="admin-only"><i class="ph ph-upload-simple"></i> Importar Planilha</button>
+            <button id="btnReport" class="admin-only"><i class="ph ph-file-pdf"></i> Relatório PDF</button>
         </nav>
 
         <button id="btnNewAppointment" class="primary-action admin-only"><i class="ph ph-plus-circle"></i> Novo atendimento</button>
@@ -194,9 +196,23 @@
         </div>
     </div>
 
+    <div id="reportModalOverlay" class="modal-overlay">
+        <div id="reportModal" class="modal-card">
+            <div class="modal-head">
+                <h3>Relatório de atendimentos</h3>
+                <button id="btnCloseReport" type="button"><i class="ph ph-x"></i></button>
+            </div>
+            <div class="report-form">
+                <label>Data inicial<input type="date" id="reportStartDate"></label>
+                <label>Data final<input type="date" id="reportEndDate"></label>
+                <button id="btnGenerateReport" type="button" class="save-button"><i class="ph ph-file-pdf"></i> Gerar PDF</button>
+            </div>
+        </div>
+    </div>
+
     <div id="toastContainer" class="toast-container"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script src="app.js?v=25"></script>
+    <script src="app.js?v=26"></script>
 </body>
 </html>
