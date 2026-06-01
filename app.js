@@ -121,6 +121,24 @@
         return weekdays[parsedDate.getDay()] || '';
     };
 
+    const formatDateBR = (dateValue) => {
+        if (!dateValue) return '';
+        const fixed = fixTextEncoding(dateValue);
+        const isoMatch = fixed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (isoMatch) return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
+        const brMatch = fixed.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+        if (brMatch) return fixed;
+        const parsed = new Date(fixed);
+        if (!Number.isNaN(parsed.getTime())) {
+            return new Intl.DateTimeFormat('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            }).format(parsed);
+        }
+        return fixed;
+    };
+
     const ADMIN_PASSCODE_HASH = '158a323a7ba44870f23d96f1516dd70aa48e9a72db4ebb026b0a89e212a208ab';
     const ADMIN_PASSCODE_FALLBACK_HASH = '143b42d57035cd';
 
@@ -1623,6 +1641,7 @@
             const inicioHtml = escapeHtml(item.inicio || '--');
             const terminoHtml = escapeHtml(item.termino || '--');
             const diaHtml = escapeHtml(item.dia || '');
+            const dataHtml = escapeHtml(formatDateBR(item.data));
             const escolaHtml = escapeHtml(item.escola || '');
             const obsHtml = escapeHtml(item.obs || '');
 
@@ -1736,7 +1755,7 @@
                     </div>
                     <div class="detail-item">
                         <span class="detail-label">Data</span>
-                        <span class="detail-value"><i class="ph ph-calendar-blank text-textMain/50 text-base"></i> ${diaHtml} (${item.data})</span>
+                        <span class="detail-value"><i class="ph ph-calendar-blank text-textMain/50 text-base"></i> ${diaHtml} (${dataHtml})</span>
                     </div>
                     ${item.escola ? `
                     <div class="detail-item">
