@@ -11,7 +11,7 @@
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#f6f7fb">
     <link rel="apple-touch-icon" href="logo-ong.png">
-    <link rel="stylesheet" href="style.css?v=26">
+    <link rel="stylesheet" href="style.css?v=27">
 </head>
 <body class="viewer-mode">
     <aside class="app-sidebar">
@@ -119,6 +119,12 @@
         </div>
         <form id="appointmentForm" class="drawer-form">
             <input type="hidden" id="formId">
+            <label id="editScopeGroup" class="edit-scope hidden">Aplicar edição
+                <select id="editScope">
+                    <option value="day">Apenas este atendimento do dia</option>
+                    <option value="patient">Todos os atendimentos deste paciente</option>
+                </select>
+            </label>
             <div class="form-grid">
                 <label>Profissional<input type="text" id="formProfissional" required placeholder="Ex: Juliana"></label>
                 <label>Atendimento<input type="text" id="formTipo" required placeholder="Ex: Psicóloga"></label>
@@ -213,6 +219,6 @@
     <div id="toastContainer" class="toast-container"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script src="app.js?v=26"></script>
+    <script src="app.js?v=27"></script>
 </body>
 </html>

@@ -336,7 +336,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .floating-new { position: fixed; right: 18px; bottom: 18px; width: 58px; height: 58px; border-radius: 50%; background: var(--blue); color: #fff; box-shadow: 0 14px 34px rgba(37,99,235,.32); z-index: 50; font-size: 1.35rem; }
 .overlay, .modal-overlay { position: fixed; inset: 0; z-index: 80; background: rgba(15,23,42,.32); opacity: 0; pointer-events: none; transition: opacity .18s ease; }
 .overlay.pointer-events-auto, .modal-overlay.active { opacity: 1; pointer-events: auto; }
-.drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 90; width: min(460px, 100vw); background: var(--panel); transform: translateX(100%); transition: transform .2s ease; display: flex; flex-direction: column; box-shadow: -18px 0 40px rgba(15,23,42,.16); }
+.drawer { position: fixed; top: 16px; right: 16px; bottom: 16px; z-index: 90; width: min(760px, calc(100vw - 32px)); background: var(--panel); transform: translateX(calc(100% + 24px)); transition: transform .2s ease; display: flex; flex-direction: column; box-shadow: -18px 0 40px rgba(15,23,42,.16); border-radius: 18px; overflow: hidden; }
 .drawer.translate-x-0 { transform: translateX(0); }
 .drawer-head, .modal-head { min-height: 68px; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; border-bottom: 1px solid var(--line); }
 .drawer-head h2, .modal-head h3 { margin: 0; }
@@ -345,6 +345,12 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .drawer-form label { display: grid; gap: 6px; color: var(--muted); font-size: .72rem; font-weight: 800; text-transform: uppercase; }
 .drawer-form input, .drawer-form select, .inline-form input, .report-form input { height: var(--tap); border-radius: 12px; background: var(--soft); color: var(--text); padding: 0 12px; text-transform: none; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.edit-scope {
+    padding: 12px;
+    border-radius: 14px;
+    background: #eef6ff;
+    color: var(--blue) !important;
+}
 .save-button, #btnAddMonitor, #btnConfirmOk, #btnConfirmCancel { min-height: var(--tap); border-radius: 12px; padding: 0 16px; font-weight: 800; }
 .save-button, #btnConfirmOk { background: var(--blue); color: #fff; }
 #btnConfirmCancel { background: var(--soft); color: var(--text); }
@@ -472,7 +478,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
         padding: 0 5px;
         font-size: .48rem;
     }
-    .drawer { width: 100vw; }
+    .drawer { inset: 0; width: 100vw; border-radius: 0; transform: translateX(100%); }
     .form-grid { grid-template-columns: 1fr; }
     .floating-new { width: 50px; height: 50px; right: 14px; bottom: 14px; }
 }

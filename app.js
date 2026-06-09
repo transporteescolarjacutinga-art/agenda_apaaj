@@ -9,6 +9,8 @@
         btnCloseDrawer: document.getElementById('closeDrawer'),
         drawerTitle: document.getElementById('drawerTitle'),
         form: document.getElementById('appointmentForm'),
+        editScopeGroup: document.getElementById('editScopeGroup'),
+        editScope: document.getElementById('editScope'),
         btnDownloadExcelTemplate: document.getElementById('btnDownloadExcelTemplate'),
         btnDownloadExcelTemplateMobile: document.getElementById('btnDownloadExcelTemplateMobile'),
         btnImportExcel: document.getElementById('btnImportExcel'),
@@ -1045,11 +1047,14 @@
         DOM.drawer.classList.add('translate-x-0');
         DOM.form.reset();
         document.getElementById('formId').value = '';
+        if (DOM.editScopeGroup) DOM.editScopeGroup.classList.add('hidden');
+        if (DOM.editScope) DOM.editScope.value = 'day';
 
         if (mode === 'edit' && id) {
             DOM.drawerTitle.textContent = 'Editar Agendamento';
             const item = appointments.find(a => String(a.id) === String(id));
             if(item) {
+                if (DOM.editScopeGroup) DOM.editScopeGroup.classList.remove('hidden');
                 document.getElementById('formId').value = item.id;
                 document.getElementById('formProfissional').value = item.profissional || '';
                 document.getElementById('formTipo').value = item.tipo || '';
@@ -1312,10 +1317,17 @@
         submitBtn.disabled = true;
 
         if (id) {
-            // Edição de um registro diário existente (UPDATE de linha única)
             const existing = appointments.find(a => String(a.id) === String(id));
-            const updatedRecord = {
-                ...existing,
+            if (!existing) {
+                showToast('Atendimento não encontrado para edição.', 'error');
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+                return;
+            }
+
+            const editScope = DOM.editScope?.value || 'day';
+            const existingPatientKey = normalizeFilterText(existing.paciente);
+            const editedFields = {
                 profissional: document.getElementById('formProfissional').value,
                 tipo: document.getElementById('formTipo').value,
                 paciente: document.getElementById('formPaciente').value,
@@ -1328,17 +1340,36 @@
                 obs: document.getElementById('formObs').value
             };
 
-            // Salvamento Otimista (local imediato)
-            const idx = appointments.findIndex(a => String(a.id) === String(id));
-            if(idx > -1) appointments[idx] = updatedRecord;
+            const targetIndexes = editScope === 'patient'
+                ? appointments
+                    .map((record, index) => ({ record, index }))
+                    .filter(({ record }) => normalizeFilterText(record.paciente) === existingPatientKey)
+                    .map(({ index }) => index)
+                : [appointments.findIndex(a => String(a.id) === String(id))].filter(index => index > -1);
+
+            const updatedRecords = targetIndexes.map(index => ({
+                ...appointments[index],
+                ...editedFields
+            }));
+
+            targetIndexes.forEach((index, position) => {
+                appointments[index] = updatedRecords[position];
+            });
+
             localStorage.setItem('lumina_agenda_cache', JSON.stringify(appointments));
             updateFilterOptions();
             render();
             closeDrawer();
-            showToast('Agendamento atualizado!');
 
-            // Envio para Supabase em background
-            supabaseUpdateAppointment(updatedRecord).catch(err => console.error("Erro ao sincronizar update:", err));
+            try {
+                await Promise.all(updatedRecords.map(record => supabaseUpdateAppointment(record)));
+                showToast(editScope === 'patient'
+                    ? `${updatedRecords.length} atendimentos do paciente atualizados.`
+                    : 'Atendimento do dia atualizado.');
+            } catch (err) {
+                console.error("Erro ao sincronizar edição:", err);
+                showToast('Editado localmente, mas falhou ao sincronizar na nuvem.', 'error');
+            }
 
             submitBtn.innerHTML = originalText;
             submitBtn.disabled = false;
