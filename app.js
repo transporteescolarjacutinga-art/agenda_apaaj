@@ -1,4 +1,4 @@
-﻿document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', () => {
     // ---- DOM Elements ----
     const DOM = {
         agendaList: document.getElementById('agendaList'),
@@ -571,6 +571,14 @@
         });
     }
 
+    async function supabaseDeleteRecurringAppointments(paciente, dia, inicio) {
+        const query = `paciente=eq.${encodeURIComponent(paciente)}&dia=eq.${encodeURIComponent(dia)}&inicio=eq.${encodeURIComponent(inicio)}`;
+        return supabaseRequest(`${SUPABASE_TABLES.appointments}?${query}`, {
+            method: 'DELETE',
+            headers: { Prefer: 'return=minimal' }
+        });
+    }
+
     async function syncLocalCacheToSupabaseIfEmpty(cloudData) {
         if (Array.isArray(cloudData) && cloudData.length > 0) return cloudData;
 
@@ -1090,7 +1098,7 @@
         const iconContainer = document.getElementById('confirmModalIcon');
         
         titleEl.textContent = title;
-        messageEl.textContent = message;
+        messageEl.innerHTML = message;
         iconContainer.className = `w-16 h-16 rounded-2xl flex items-center justify-center mb-2 ${colorClass}`;
         iconContainer.innerHTML = `<i class="ph ${iconClass} text-3xl"></i>`;
         
@@ -1430,23 +1438,65 @@
             showToast('Acesso negado.', 'error');
             return;
         }
-        if(confirm('Excluir este agendamento definitivamente?')) {
-            DOM.agendaList.innerHTML = '<div class="py-12 flex flex-col items-center gap-2"><i class="ph ph-spinner-gap animate-spin text-2xl text-red-500"></i> Excluindo...</div>';
-            
-            try {
-                await supabaseDeleteAppointment(id);
+
+        const item = appointments.find(a => String(a.id) === String(id));
+        if (!item) return;
+
+        const dateStrBR = formatDateBR(item.data);
+        const weekday = item.dia || getWeekdayFromISO(item.data);
+        const startTime = item.inicio || '';
+
+        const modalHtml = `
+            <div class="flex flex-col gap-3">
+                <p>Tem certeza de que deseja realizar esta exclusão para o paciente <strong>${escapeHtml(item.paciente)}</strong>?</p>
+                <div class="flex flex-col gap-1 text-left mt-2">
+                    <label class="text-[0.7rem] font-bold text-textMain/50 uppercase tracking-wider">Escopo da exclusão:</label>
+                    <select id="deleteScopeSelect" class="w-full bg-surface border border-textMain/10 rounded-lg px-2.5 py-2 text-xs font-semibold outline-none focus:border-specBlue">
+                        <option value="single">Apenas este atendimento (${dateStrBR} às ${startTime})</option>
+                        <option value="recurring">Toda a série recorrente (${weekday} às ${startTime})</option>
+                    </select>
+                </div>
+            </div>
+        `;
+
+        showConfirmationModal({
+            title: 'Confirmar Exclusão',
+            message: modalHtml,
+            iconClass: 'ph-trash',
+            colorClass: 'bg-specRed/10 text-specRed',
+            onConfirm: async () => {
+                const scopeSelect = document.getElementById('deleteScopeSelect');
+                const scope = scopeSelect ? scopeSelect.value : 'single';
+
+                DOM.agendaList.innerHTML = '<div class="py-12 flex flex-col items-center gap-2"><i class="ph ph-spinner-gap animate-spin text-2xl text-red-500"></i> Excluindo...</div>';
                 
-                appointments = appointments.filter(a => String(a.id) !== String(id));
-                localStorage.setItem('lumina_agenda_cache', JSON.stringify(appointments));
-                updateFilterOptions();
-                render();
-                showToast('Excluído com sucesso!');
-            } catch(e) {
-                console.error(e);
-                showToast("Erro ao tentar deletar na Nuvem.", 'error');
-                render(); 
+                try {
+                    if (scope === 'recurring') {
+                        await supabaseDeleteRecurringAppointments(item.paciente, weekday, startTime);
+                        
+                        appointments = appointments.filter(a => !(
+                            normalizeFilterText(a.paciente) === normalizeFilterText(item.paciente) &&
+                            (a.dia === weekday || getWeekdayFromISO(a.data) === weekday) &&
+                            (a.inicio || '') === startTime
+                        ));
+                        showToast('Toda a série recorrente foi excluída com sucesso!');
+                    } else {
+                        await supabaseDeleteAppointment(id);
+                        
+                        appointments = appointments.filter(a => String(a.id) !== String(id));
+                        showToast('Atendimento excluído com sucesso!');
+                    }
+
+                    localStorage.setItem('lumina_agenda_cache', JSON.stringify(appointments));
+                    updateFilterOptions();
+                    render();
+                } catch(e) {
+                    console.error(e);
+                    showToast("Erro ao tentar deletar na Nuvem.", 'error');
+                    render(); 
+                }
             }
-        }
+        });
     };
 
     window.editAppointment = (id) => {
