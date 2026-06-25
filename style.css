@@ -122,7 +122,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 .filters-panel {
     display: grid;
-    grid-template-columns: 220px minmax(180px, 1fr) 170px 130px auto;
+    grid-template-columns: 220px minmax(180px, 1fr) 170px 130px 170px auto;
     gap: 8px;
     min-width: 0;
 }
@@ -151,15 +151,12 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .search-control i { margin-left: 14px; color: var(--muted); }
 .search-control input { box-shadow: none; }
 .clear-filters { min-height: var(--tap); border-radius: 12px; background: #ffe8ee; color: var(--red); padding: 0 14px; font-weight: 800; }
-#filterEscola,
-.summary-card {
-    display: none !important;
-}
+/* Filtro de escolas e resumo reexibidos */
 
 .dashboard-panel {
     padding: 12px 18px;
     display: grid;
-    grid-template-columns: repeat(3, minmax(120px, 1fr));
+    grid-template-columns: repeat(5, minmax(120px, 1fr));
     gap: 10px;
 }
 .metric-card, .summary-card {
@@ -399,7 +396,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
     .date-control, .search-control { min-height: 40px; border-radius: 10px; }
     .date-control input, .search-control input, .filters-panel select { height: 40px; min-height: 40px; border-radius: 10px; font-size: .78rem; box-shadow: 0 4px 12px rgba(20,33,61,.06); }
     .date-control button { width: 40px; height: 40px; }
-    #filterEscola { display: none !important; }
+    /* Habilitado filtro de escola no mobile */
     .clear-filters { grid-column: 1 / -1; width: 100%; min-height: 38px; border-radius: 10px; font-size: .72rem; }
     .dashboard-panel { grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 7px 8px; gap: 5px; }
     .metric-card { min-height: 50px; padding: 7px; border-radius: 12px; box-shadow: 0 5px 14px rgba(20,33,61,.06); }

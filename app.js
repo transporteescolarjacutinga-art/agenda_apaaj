@@ -1289,6 +1289,37 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    function checkAppointmentConflict(paciente, profesional, data, inicio, termino, excludeId = null) {
+        if (!data || !inicio || !termino) return null;
+        
+        const pacNorm = normalizeFilterText(paciente);
+        const profNorm = normalizeFilterText(profesional);
+        
+        for (const appt of appointments) {
+            if (excludeId && String(appt.id) === String(excludeId)) continue;
+            if (appt.data !== data) continue;
+            
+            const statusParts = getStatusParts(appt.status);
+            if (statusParts.includes('CANCELADO')) continue;
+            
+            const apptStart = appt.inicio;
+            const apptEnd = appt.termino;
+            if (!apptStart || !apptEnd) continue;
+            
+            const overlaps = (inicio < apptEnd) && (termino > apptStart);
+            
+            if (overlaps) {
+                if (normalizeFilterText(appt.paciente) === pacNorm) {
+                    return `O paciente "${paciente}" já possui um agendamento neste dia (${formatDateBR(data)}) das ${apptStart} às ${apptEnd}.`;
+                }
+                if (normalizeFilterText(appt.profissional) === profNorm) {
+                    return `O profissional "${profesional}" já possui um agendamento neste dia (${formatDateBR(data)}) das ${apptStart} às ${apptEnd} (paciente: ${appt.paciente}).`;
+                }
+            }
+        }
+        return null;
+    }
+
     DOM.form.addEventListener('submit', async (e) => {
         e.preventDefault();
         
@@ -1335,25 +1366,69 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const editScope = DOM.editScope?.value || 'day';
             const existingPatientKey = normalizeFilterText(existing.paciente);
-            const editedFields = {
-                profissional: document.getElementById('formProfissional').value,
-                tipo: document.getElementById('formTipo').value,
-                paciente: document.getElementById('formPaciente').value,
-                turno: turnoCalculado,
-                inicio: inicioValue,
-                termino: fTermino,
-                escola: document.getElementById('formEscola').value,
-                telefone: document.getElementById('formTelefone').value,
-                transporte: document.getElementById('formTransporte') ? document.getElementById('formTransporte').value : 'Ambos',
-                obs: document.getElementById('formObs').value
-            };
+            
+            const pVal = document.getElementById('formProfissional').value;
+            const tVal = document.getElementById('formTipo').value;
+            const pacVal = document.getElementById('formPaciente').value;
+            const escVal = document.getElementById('formEscola').value;
+            const telVal = document.getElementById('formTelefone').value;
+            const transpVal = document.getElementById('formTransporte') ? document.getElementById('formTransporte').value : 'Ambos';
+            const obsVal = document.getElementById('formObs').value;
 
+            // Filtra a série recorrente relacionando paciente, dia da semana, horário e profissional
             const targetIndexes = editScope === 'patient'
                 ? appointments
                     .map((record, index) => ({ record, index }))
-                    .filter(({ record }) => normalizeFilterText(record.paciente) === existingPatientKey)
+                    .filter(({ record }) => {
+                        const samePatient = normalizeFilterText(record.paciente) === existingPatientKey;
+                        const recordWeekDay = record.dia || getWeekdayFromISO(record.data);
+                        const existingWeekDay = existing.dia || getWeekdayFromISO(existing.data);
+                        const sameDayOfWeek = recordWeekDay === existingWeekDay;
+                        const sameTime = record.inicio === existing.inicio;
+                        const sameProf = normalizeFilterText(record.profissional) === normalizeFilterText(existing.profissional);
+                        return samePatient && sameDayOfWeek && sameTime && sameProf;
+                    })
                     .map(({ index }) => index)
                 : [appointments.findIndex(a => String(a.id) === String(id))].filter(index => index > -1);
+
+            if (targetIndexes.length === 0) {
+                showToast('Nenhum agendamento correspondente encontrado para alteração.', 'error');
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+                return;
+            }
+
+            // Validar conflitos de horários para cada agendamento afetado
+            for (const index of targetIndexes) {
+                const targetRecord = appointments[index];
+                const conflictMsg = checkAppointmentConflict(
+                    pacVal,
+                    pVal,
+                    targetRecord.data,
+                    inicioValue,
+                    fTermino,
+                    targetRecord.id
+                );
+                if (conflictMsg) {
+                    showToast(conflictMsg, 'error');
+                    submitBtn.innerHTML = originalText;
+                    submitBtn.disabled = false;
+                    return;
+                }
+            }
+
+            const editedFields = {
+                profissional: pVal,
+                tipo: tVal,
+                paciente: pacVal,
+                turno: turnoCalculado,
+                inicio: inicioValue,
+                termino: fTermino,
+                escola: escVal,
+                telefone: telVal,
+                transporte: transpVal,
+                obs: obsVal
+            };
 
             const updatedRecords = targetIndexes.map(index => ({
                 ...appointments[index],
@@ -1372,7 +1447,7 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 await Promise.all(updatedRecords.map(record => supabaseUpdateAppointment(record)));
                 showToast(editScope === 'patient'
-                    ? `${updatedRecords.length} atendimentos do paciente atualizados.`
+                    ? `${updatedRecords.length} atendimentos da série recorrente atualizados.`
                     : 'Atendimento do dia atualizado.');
             } catch (err) {
                 console.error("Erro ao sincronizar edição:", err);
@@ -1391,21 +1466,46 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const occurrences = getOccurrencesForSixMonths(dataInicioVal);
+            const pVal = document.getElementById('formProfissional').value;
+            const pacVal = document.getElementById('formPaciente').value;
+            const tVal = document.getElementById('formTipo').value;
+            const escVal = document.getElementById('formEscola').value;
+            const telVal = document.getElementById('formTelefone').value;
+            const transpVal = document.getElementById('formTransporte') ? document.getElementById('formTransporte').value : 'Ambos';
+            const obsVal = document.getElementById('formObs').value;
+
+            // Validar conflitos de horários para todas as ocorrências geradas
+            for (const dateStr of occurrences) {
+                const conflictMsg = checkAppointmentConflict(
+                    pacVal,
+                    pVal,
+                    dateStr,
+                    inicioValue,
+                    fTermino
+                );
+                if (conflictMsg) {
+                    showToast(conflictMsg, 'error');
+                    submitBtn.innerHTML = originalText;
+                    submitBtn.disabled = false;
+                    return;
+                }
+            }
+
             const batchRecords = occurrences.map((dateStr, index) => {
                 return {
                     id: `${Date.now()}_flat_${index}_${Math.random().toString(36).substr(2, 5)}`,
                     data: dateStr,
-                    profissional: document.getElementById('formProfissional').value,
-                    tipo: document.getElementById('formTipo').value,
-                    paciente: document.getElementById('formPaciente').value,
+                    profissional: pVal,
+                    tipo: tVal,
+                    paciente: pacVal,
                     dia: getWeekdayFromISO(dateStr),
                     turno: turnoCalculado,
                     inicio: inicioValue,
                     termino: fTermino,
-                    escola: document.getElementById('formEscola').value,
-                    telefone: document.getElementById('formTelefone').value,
-                    transporte: document.getElementById('formTransporte') ? document.getElementById('formTransporte').value : 'Ambos',
-                    obs: document.getElementById('formObs').value,
+                    escola: escVal,
+                    telefone: telVal,
+                    transporte: transpVal,
+                    obs: obsVal,
                     status: '',
                     monitora: '',
                     gpsEntrada: '',
