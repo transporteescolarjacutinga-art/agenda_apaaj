@@ -11,127 +11,133 @@
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#2563eb">
     <link rel="apple-touch-icon" href="logo-ong.png">
-    <link rel="stylesheet" href="style.css?v=28">
+    <link rel="stylesheet" href="style.css?v=30">
 </head>
 <body class="viewer-mode">
 
     <!-- Topbar Header Fixo -->
     <header class="app-header">
-        <div class="brand-wrapper">
-            <img src="logo-ong.png" alt="Novo Olhar">
-            <div class="brand-title-group">
-                <h1>Transporte Novo Olhar</h1>
-                <p>Agenda TEA 2026</p>
+        <div class="header-container">
+            <div class="brand-wrapper">
+                <img src="logo-ong.png" alt="Novo Olhar">
+                <div class="brand-title-group">
+                    <h1>Transporte Novo Olhar</h1>
+                    <p>Agenda TEA 2026</p>
+                </div>
             </div>
-        </div>
-        <div class="header-right-actions">
-            <div class="live-clock-badge">
-                <i class="ph ph-clock"></i>
-                <span id="liveClock">--:--</span>
+            <div class="header-right-actions">
+                <div class="live-clock-badge">
+                    <i class="ph ph-clock text-tea-blue"></i>
+                    <span id="liveClock">--:--</span>
+                </div>
+                <button id="btnAdminLogin" class="header-btn" title="Acesso Coordenador"><i class="ph ph-lock-key"></i></button>
+                <button id="btnAdminLogout" class="header-btn hidden" title="Sair do Modo Admin"><i class="ph ph-lock-key-open"></i></button>
             </div>
-            <button id="btnAdminLogin" class="header-btn" title="Acesso Coordenador"><i class="ph ph-lock-key"></i></button>
-            <button id="btnAdminLogout" class="header-btn hidden" title="Sair do Modo Admin"><i class="ph ph-lock-key-open"></i></button>
         </div>
     </header>
 
     <!-- Faixa Seletora de Data & Filtros -->
     <section class="date-nav-bar">
-        <div class="date-picker-row">
-            <button id="btnPrevDay" class="date-arrow-btn" type="button" aria-label="Dia Anterior"><i class="ph ph-caret-left"></i></button>
-            <div class="date-display-box">
-                <input type="date" id="filterDataRef">
-                <div class="date-display-text">
-                    <i class="ph ph-calendar-blank"></i>
-                    <span id="displayDateLabel">Carregando...</span>
+        <div class="nav-bar-container">
+            <div class="date-picker-row">
+                <button id="btnPrevDay" class="date-arrow-btn" type="button" aria-label="Dia Anterior"><i class="ph ph-caret-left"></i></button>
+                <div class="date-display-box">
+                    <input type="date" id="filterDataRef">
+                    <div class="date-display-text">
+                        <i class="ph ph-calendar-blank"></i>
+                        <span id="displayDateLabel">Carregando...</span>
+                    </div>
                 </div>
+                <button id="btnNextDay" class="date-arrow-btn" type="button" aria-label="Próximo Dia"><i class="ph ph-caret-right"></i></button>
             </div>
-            <button id="btnNextDay" class="date-arrow-btn" type="button" aria-label="Próximo Dia"><i class="ph ph-caret-right"></i></button>
-        </div>
 
-        <div class="filters-scroll-row">
-            <div class="search-input-box">
-                <i class="ph ph-magnifying-glass"></i>
-                <input type="text" id="filterPaciente" placeholder="Buscar por paciente...">
+            <div class="filters-scroll-row">
+                <div class="search-input-box">
+                    <i class="ph ph-magnifying-glass"></i>
+                    <input type="text" id="filterPaciente" placeholder="Buscar por paciente...">
+                </div>
+                <select id="filterProfissional" class="filter-select">
+                    <option value="">Profissionais</option>
+                </select>
+                <select id="filterTurno" class="filter-select">
+                    <option value="">Turnos</option>
+                    <option value="Manhã">Manhã</option>
+                    <option value="Tarde">Tarde</option>
+                </select>
+                <select id="filterEscola" class="filter-select">
+                    <option value="">Instituições</option>
+                </select>
+                <button id="btnClearFilters" class="clear-filter-btn hidden" type="button"><i class="ph ph-funnel-x"></i> Limpar</button>
             </div>
-            <select id="filterProfissional" class="filter-select">
-                <option value="">Profissionais</option>
-            </select>
-            <select id="filterTurno" class="filter-select">
-                <option value="">Turnos</option>
-                <option value="Manhã">Manhã</option>
-                <option value="Tarde">Tarde</option>
-            </select>
-            <select id="filterEscola" class="filter-select">
-                <option value="">Instituições</option>
-            </select>
-            <button id="btnClearFilters" class="clear-filter-btn hidden" type="button"><i class="ph ph-funnel-x"></i> Limpar</button>
         </div>
     </section>
 
     <!-- Área Principal (App Viewport) -->
     <main class="app-viewport">
-        <!-- Aba 1: Agenda de Atendimentos -->
-        <section id="tabAgenda" class="tab-content active">
-            <div id="agendaList" class="agenda-cards-list"></div>
-        </section>
+        <div class="viewport-container">
+            <!-- Aba 1: Agenda de Atendimentos -->
+            <section id="tabAgenda" class="tab-content active">
+                <div id="agendaList" class="agenda-cards-list"></div>
+            </section>
 
-        <!-- Aba 2: Gerenciamento de Monitoras -->
-        <section id="tabMonitors" class="tab-content">
-            <div class="metric-card-app violet mb-4">
-                <span>Gerenciamento de Equipe</span>
-                <strong>Monitoras Cadastradas</strong>
-            </div>
-            <div class="card-info-grid mb-4" style="grid-template-columns: 1fr auto;">
-                <input type="text" id="newMonitorName" placeholder="Nome da nova monitora" style="height: 44px; padding: 0 12px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; font-weight: 600;">
-                <button id="btnAddMonitor" type="button" class="btn-primary-tea" style="padding: 0 16px;"><i class="ph ph-plus-circle"></i> Adicionar</button>
-            </div>
-            <div id="monitorsList" class="agenda-cards-list"></div>
-        </section>
-
-        <!-- Aba 3: Resumo & Métricas -->
-        <section id="tabMetrics" class="tab-content">
-            <div class="metrics-grid-tab">
-                <button type="button" id="dashTotalCard" class="metric-card-app blue">
-                    <span>Atendimentos do Dia</span>
-                    <strong id="dashTotal">0</strong>
-                </button>
-                <button type="button" id="dashMorningCard" class="metric-card-app yellow">
-                    <span>Turno Manhã</span>
-                    <strong id="dashMorning">0</strong>
-                </button>
-                <button type="button" id="dashAfternoonCard" class="metric-card-app green">
-                    <span>Turno Tarde</span>
-                    <strong id="dashAfternoon">0</strong>
-                </button>
-            </div>
-
-            <div class="metric-card-app violet">
-                <div class="flex justify-between items-center mb-2">
-                    <span style="color: var(--text-primary); font-size: 0.85rem;">Instituições atendidas hoje</span>
-                    <strong id="dashSchoolsCount" style="font-size: 1.1rem; color: var(--tea-violet-dark);">0</strong>
+            <!-- Aba 2: Gerenciamento de Monitoras -->
+            <section id="tabMonitors" class="tab-content">
+                <div class="metric-card-app violet mb-4">
+                    <span>Gerenciamento de Equipe</span>
+                    <strong>Monitoras Cadastradas</strong>
                 </div>
-                <div id="dashSchools" class="flex flex-col gap-2"></div>
-            </div>
-        </section>
+                <div class="card-info-grid mb-4" style="grid-template-columns: 1fr auto;">
+                    <input type="text" id="newMonitorName" placeholder="Nome da nova monitora" style="height: 44px; padding: 0 14px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; font-weight: 600;">
+                    <button id="btnAddMonitor" type="button" class="btn-primary-tea" style="padding: 0 18px;"><i class="ph ph-plus-circle"></i> Adicionar</button>
+                </div>
+                <div id="monitorsList" class="agenda-cards-list"></div>
+            </section>
 
-        <!-- Aba 4: Gerador de Relatórios -->
-        <section id="tabReports" class="tab-content">
-            <div class="metric-card-app blue mb-4">
-                <span>Relatório PDF</span>
-                <strong>Gerar Relatório por Período</strong>
-            </div>
-            <div class="agenda-card">
-                <div class="form-group-mobile">
-                    <label>Data Inicial</label>
-                    <input type="date" id="reportStartDate">
+            <!-- Aba 3: Resumo & Métricas -->
+            <section id="tabMetrics" class="tab-content">
+                <div class="metrics-grid-tab">
+                    <button type="button" id="dashTotalCard" class="metric-card-app blue">
+                        <span>Atendimentos do Dia</span>
+                        <strong id="dashTotal">0</strong>
+                    </button>
+                    <button type="button" id="dashMorningCard" class="metric-card-app yellow">
+                        <span>Turno Manhã</span>
+                        <strong id="dashMorning">0</strong>
+                    </button>
+                    <button type="button" id="dashAfternoonCard" class="metric-card-app green">
+                        <span>Turno Tarde</span>
+                        <strong id="dashAfternoon">0</strong>
+                    </button>
                 </div>
-                <div class="form-group-mobile">
-                    <label>Data Final</label>
-                    <input type="date" id="reportEndDate">
+
+                <div class="metric-card-app violet">
+                    <div class="flex justify-between items-center mb-2">
+                        <span style="color: var(--text-primary); font-size: 0.85rem;">Instituições atendidas hoje</span>
+                        <strong id="dashSchoolsCount" style="font-size: 1.1rem; color: var(--tea-violet-dark);">0</strong>
+                    </div>
+                    <div id="dashSchools" class="flex flex-col gap-2"></div>
                 </div>
-                <button id="btnGenerateReport" type="button" class="btn-primary-tea"><i class="ph ph-file-pdf"></i> Gerar Relatório PDF</button>
-            </div>
-        </section>
+            </section>
+
+            <!-- Aba 4: Gerador de Relatórios -->
+            <section id="tabReports" class="tab-content">
+                <div class="metric-card-app blue mb-4">
+                    <span>Relatório PDF</span>
+                    <strong>Gerar Relatório por Período</strong>
+                </div>
+                <div class="agenda-card">
+                    <div class="form-group-mobile">
+                        <label>Data Inicial</label>
+                        <input type="date" id="reportStartDate">
+                    </div>
+                    <div class="form-group-mobile">
+                        <label>Data Final</label>
+                        <input type="date" id="reportEndDate">
+                    </div>
+                    <button id="btnGenerateReport" type="button" class="btn-primary-tea"><i class="ph ph-file-pdf"></i> Gerar Relatório PDF</button>
+                </div>
+            </section>
+        </div>
     </main>
 
     <!-- Barra de Navegação Inferior Móvel (Bottom Navigation Bar) -->
@@ -166,7 +172,7 @@
         <div class="sheet-handle-bar"></div>
         <div class="sheet-header">
             <h2 id="drawerTitle">Novo Agendamento</h2>
-            <button id="closeDrawer" type="button"><i class="ph ph-x text-xl"></i></button>
+            <button id="closeDrawer" type="button" class="close-modal-btn"><i class="ph ph-x"></i></button>
         </div>
         <form id="appointmentForm" class="sheet-form-body">
             <input type="hidden" id="formId">
@@ -254,6 +260,30 @@
         </form>
     </aside>
 
+    <!-- Modal de Auditoria de Geolocalização (Timeline Logística Reconstruída) -->
+    <div id="gpsModalOverlay" class="overlay-backdrop"></div>
+    <div id="gpsModal" class="modal-center-card gps-timeline-modal">
+        <div class="gps-modal-header">
+            <div class="patient-avatar-badge" id="gpsModalAvatar">--</div>
+            <div class="patient-header-meta">
+                <h3 id="gpsModalPatient">Paciente</h3>
+                <div class="flex items-center gap-2">
+                    <span id="gpsModalDate" class="modal-date-chip">05/08/2026</span>
+                    <span id="gpsModalStatusBadge" class="badge-status-chip">Concluído</span>
+                </div>
+            </div>
+            <button id="btnCloseGpsModal" type="button" class="close-modal-btn"><i class="ph ph-x"></i></button>
+        </div>
+
+        <div id="gpsModalBody" class="gps-timeline-body">
+            <!-- Timeline inserida via JS -->
+        </div>
+
+        <div class="gps-modal-footer">
+            <button id="btnDismissGpsModal" type="button" class="btn-modal-close-full">Fechar Comprovação</button>
+        </div>
+    </div>
+
     <!-- Modal de Confirmação Mobile -->
     <div id="confirmModalOverlay" class="overlay-backdrop"></div>
     <div id="confirmModal" class="modal-center-card">
@@ -270,6 +300,6 @@
     <div id="toastContainer" class="toast-container"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script src="app.js?v=28"></script>
+    <script src="app.js?v=30"></script>
 </body>
 </html>

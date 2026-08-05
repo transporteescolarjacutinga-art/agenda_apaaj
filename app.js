@@ -25,6 +25,17 @@ document.addEventListener('DOMContentLoaded', () => {
         btnConfirmOk: document.getElementById('btnConfirmOk'),
         btnConfirmCancel: document.getElementById('btnConfirmCancel'),
 
+        // Modal de Auditoria GPS Timeline
+        gpsModalOverlay: document.getElementById('gpsModalOverlay'),
+        gpsModal: document.getElementById('gpsModal'),
+        btnCloseGpsModal: document.getElementById('btnCloseGpsModal'),
+        btnDismissGpsModal: document.getElementById('btnDismissGpsModal'),
+        gpsModalAvatar: document.getElementById('gpsModalAvatar'),
+        gpsModalPatient: document.getElementById('gpsModalPatient'),
+        gpsModalDate: document.getElementById('gpsModalDate'),
+        gpsModalStatusBadge: document.getElementById('gpsModalStatusBadge'),
+        gpsModalBody: document.getElementById('gpsModalBody'),
+
         reportStartDate: document.getElementById('reportStartDate'),
         reportEndDate: document.getElementById('reportEndDate'),
         btnGenerateReport: document.getElementById('btnGenerateReport'),
@@ -54,14 +65,43 @@ document.addEventListener('DOMContentLoaded', () => {
         const container = document.getElementById('toastContainer');
         if (!container) return;
         const toast = document.createElement('div');
-        const icon = type === 'error' ? 'ph-warning-circle' : 'ph-check-circle';
-        const colorClass = type === 'error' ? 'var(--tea-red)' : 'var(--tea-green)';
+        const icon = type === 'error' ? 'ph-warning-circle' : type === 'info' ? 'ph-info' : 'ph-check-circle';
+        const colorClass = type === 'error' ? 'var(--tea-red)' : type === 'info' ? 'var(--tea-blue)' : 'var(--tea-green)';
         toast.className = 'agenda-card';
-        toast.style.cssText = `position: fixed; top: 16px; right: 16px; z-index: 200; padding: 12px 16px; border-left: 5px solid ${colorClass}; box-shadow: var(--shadow-sheet); animation: slideIn 0.3s ease;`;
-        toast.innerHTML = `<div class="flex items-center gap-2 font-bold" style="font-size:0.85rem;"><i class="ph ${icon} text-xl" style="color:${colorClass};"></i><span>${message}</span></div>`;
+        toast.style.cssText = `position: fixed; top: 16px; right: 16px; z-index: 200; padding: 12px 16px; border-left: 4px solid ${colorClass}; box-shadow: var(--shadow-sheet); animation: slideIn 0.3s ease;`;
+        toast.innerHTML = `<div class="flex items-center gap-2 font-bold" style="font-size:0.88rem;"><i class="ph ${icon} text-xl" style="color:${colorClass};"></i><span>${message}</span></div>`;
         container.appendChild(toast);
 
-        setTimeout(() => toast.remove(), 3200);
+        setTimeout(() => toast.remove(), 3400);
+    }
+
+    // ---- Sistema de Captura de Geolocalização (GPS) ----
+    function captureGeolocation() {
+        return new Promise((resolve) => {
+            if (!navigator.geolocation) {
+                resolve('');
+                return;
+            }
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    const lat = pos.coords.latitude.toFixed(6);
+                    const lng = pos.coords.longitude.toFixed(6);
+                    resolve(`${lat},${lng}`);
+                },
+                (err) => {
+                    console.warn('Geolocation capture failed/denied:', err);
+                    resolve('');
+                },
+                { enableHighAccuracy: true, timeout: 9000, maximumAge: 0 }
+            );
+        });
+    }
+
+    function getInitials(name = '') {
+        const parts = name.trim().split(/\s+/);
+        if (parts.length === 0 || !parts[0]) return 'N';
+        if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+        return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
     }
     
     function isAdmin() {
@@ -196,7 +236,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const activeTag = document.activeElement?.tagName;
         const userTouched = Date.now() - lastUserInteractionAt < 12000;
         const formFocused = ['INPUT', 'SELECT', 'TEXTAREA'].includes(activeTag);
-        const modalOpen = DOM.confirmModalOverlay?.classList.contains('active');
+        const modalOpen = DOM.confirmModalOverlay?.classList.contains('active') || DOM.gpsModalOverlay?.classList.contains('active');
         const sheetOpen = DOM.drawer?.classList.contains('active');
         return userTouched || formFocused || modalOpen || sheetOpen;
     }
@@ -556,6 +596,120 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     DOM.btnConfirmCancel.addEventListener('click', closeConfirmationModal);
 
+    // ---- Modal de Auditoria GPS Timeline (REFEITO DO ZERO) ----
+    function openGpsAuditModal(item, dateRef) {
+        if (!DOM.gpsModal) return;
+        DOM.gpsModalAvatar.textContent = getInitials(item.paciente);
+        DOM.gpsModalPatient.textContent = item.paciente || 'Paciente';
+        DOM.gpsModalDate.textContent = formatDateBR(dateRef);
+
+        const statusParts = getStatusParts(item.status);
+        const allowedSteps = getProgressStepsForTransport(item.transporte);
+        const isCancelled = item.status === 'CANCELADO';
+
+        if (isCancelled) {
+            DOM.gpsModalStatusBadge.textContent = 'Ausente';
+            DOM.gpsModalStatusBadge.className = 'badge-status-chip ausencia';
+        } else if (allowedSteps.every(s => statusParts.includes(s.code))) {
+            DOM.gpsModalStatusBadge.textContent = 'Concluído';
+            DOM.gpsModalStatusBadge.className = 'badge-status-chip';
+        } else if (statusParts.length > 0) {
+            DOM.gpsModalStatusBadge.textContent = 'Em Transporte';
+            DOM.gpsModalStatusBadge.className = 'badge-status-chip';
+            DOM.gpsModalStatusBadge.style.background = 'var(--tea-yellow-light)';
+            DOM.gpsModalStatusBadge.style.color = 'var(--tea-yellow)';
+            DOM.gpsModalStatusBadge.style.borderColor = 'var(--tea-yellow-border)';
+        } else {
+            DOM.gpsModalStatusBadge.textContent = 'Aguardando';
+            DOM.gpsModalStatusBadge.className = 'badge-status-chip';
+            DOM.gpsModalStatusBadge.style.background = 'var(--surface-subtle)';
+            DOM.gpsModalStatusBadge.style.color = 'var(--text-muted)';
+            DOM.gpsModalStatusBadge.style.borderColor = 'var(--border-main)';
+        }
+
+        DOM.gpsModalBody.innerHTML = '';
+
+        const trackGroup = document.createElement('div');
+        trackGroup.className = 'timeline-track-group';
+
+        let hasTimelineItems = false;
+
+        // Passos do transporte
+        allowedSteps.forEach(step => {
+            const isDone = statusParts.includes(step.code);
+            const timeStr = item[step.timeField] || '';
+            const gpsStr = item[step.gpsField] || '';
+            const mapsUrl = gpsStr ? `https://www.google.com/maps?q=${gpsStr}` : null;
+
+            if (isDone || timeStr) {
+                hasTimelineItems = true;
+                const stepEl = document.createElement('div');
+                stepEl.className = `timeline-step-item ${isDone ? 'completed' : ''}`;
+                stepEl.innerHTML = `
+                    <div class="timeline-dot"><i class="ph ${isDone ? 'ph-check' : step.icon}"></i></div>
+                    <div class="timeline-content-card">
+                        <div class="timeline-title-row">
+                            <strong><i class="ph ${step.icon} text-tea-blue"></i> ${escapeHtml(step.label)}</strong>
+                            ${timeStr ? `<span class="timeline-time-pill"><i class="ph ph-clock"></i> ${escapeHtml(timeStr)}</span>` : ''}
+                        </div>
+                        ${mapsUrl ? `
+                            <a href="${mapsUrl}" target="_blank" class="btn-maps-link">
+                                <i class="ph ph-map-pin"></i> Ver Localização no Google Maps
+                            </a>
+                        ` : `
+                            <div class="text-xs font-semibold text-text-muted mt-1">
+                                <i class="ph ph-info"></i> Marcação realizada (sem coordenadas GPS).
+                            </div>
+                        `}
+                    </div>
+                `;
+                trackGroup.appendChild(stepEl);
+            }
+        });
+
+        // Registro de ausência em timeline
+        if (isCancelled) {
+            hasTimelineItems = true;
+            const mapsUrl = item.ausenciaGps ? `https://www.google.com/maps?q=${item.ausenciaGps}` : null;
+            const absenceEl = document.createElement('div');
+            absenceEl.className = 'timeline-step-item ausencia';
+            absenceEl.innerHTML = `
+                <div class="timeline-dot"><i class="ph ph-x"></i></div>
+                <div class="timeline-content-card" style="border-color: var(--tea-red-border); background: var(--tea-red-light);">
+                    <div class="timeline-title-row">
+                        <strong style="color: var(--tea-red);"><i class="ph ph-x-circle"></i> Ausência Confirmada</strong>
+                        ${item.ausenciaTimestamp ? `<span class="timeline-time-pill" style="background: var(--tea-red); color: #fff;">${escapeHtml(item.ausenciaTimestamp)}</span>` : ''}
+                    </div>
+                    ${item.ausenciaMotivo ? `<div class="text-xs font-bold" style="color: var(--text-primary);">Motivo: "${escapeHtml(item.ausenciaMotivo)}"</div>` : ''}
+                    ${mapsUrl ? `
+                        <a href="${mapsUrl}" target="_blank" class="btn-maps-link" style="background: var(--tea-red);">
+                            <i class="ph ph-map-pin"></i> Ver Local da Ausência no Maps
+                        </a>
+                    ` : ''}
+                </div>
+            `;
+            trackGroup.appendChild(absenceEl);
+        }
+
+        if (hasTimelineItems) {
+            DOM.gpsModalBody.appendChild(trackGroup);
+        } else {
+            DOM.gpsModalBody.innerHTML = '<div class="text-center text-muted font-bold py-8 text-sm">Nenhum evento ou localização de transporte foi registrado até o momento.</div>';
+        }
+
+        DOM.gpsModalOverlay.classList.add('active');
+        DOM.gpsModal.classList.add('active');
+    }
+
+    function closeGpsModal() {
+        DOM.gpsModalOverlay.classList.remove('active');
+        DOM.gpsModal.classList.remove('active');
+    }
+
+    if (DOM.btnCloseGpsModal) DOM.btnCloseGpsModal.addEventListener('click', closeGpsModal);
+    if (DOM.btnDismissGpsModal) DOM.btnDismissGpsModal.addEventListener('click', closeGpsModal);
+    if (DOM.gpsModalOverlay) DOM.gpsModalOverlay.addEventListener('click', closeGpsModal);
+
     // ---- Form Submission ----
     DOM.form.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -639,6 +793,64 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnNextDay) btnNextDay.addEventListener('click', () => shiftDate(1));
     if (DOM.fData) DOM.fData.addEventListener('change', () => { updateDisplayDateLabel(); render(); });
 
+    // Listeners de Filtro
+    function handleFilterChange() {
+        updateClearFiltersButton();
+        render();
+    }
+
+    [DOM.fProf, DOM.fTurno, DOM.fEscola].forEach(el => {
+        if (el) el.addEventListener('change', handleFilterChange);
+    });
+
+    if (DOM.fPaciente) {
+        DOM.fPaciente.addEventListener('input', handleFilterChange);
+    }
+
+    function updateClearFiltersButton() {
+        if (!DOM.btnClearFilters) return;
+        const hasFilter = (DOM.fProf && DOM.fProf.value) || (DOM.fTurno && DOM.fTurno.value) || (DOM.fEscola && DOM.fEscola.value) || (DOM.fPaciente && DOM.fPaciente.value);
+        if (hasFilter) {
+            DOM.btnClearFilters.classList.remove('hidden');
+        } else {
+            DOM.btnClearFilters.classList.add('hidden');
+        }
+    }
+
+    if (DOM.btnClearFilters) {
+        DOM.btnClearFilters.addEventListener('click', () => {
+            if (DOM.fProf) DOM.fProf.value = '';
+            if (DOM.fTurno) DOM.fTurno.value = '';
+            if (DOM.fEscola) DOM.fEscola.value = '';
+            if (DOM.fPaciente) DOM.fPaciente.value = '';
+            handleFilterChange();
+        });
+    }
+
+    // Filtros rápidos pelos cartões de métrica
+    if (DOM.dashTotalCard) {
+        DOM.dashTotalCard.addEventListener('click', () => {
+            if (DOM.fTurno) DOM.fTurno.value = '';
+            if (DOM.fEscola) DOM.fEscola.value = '';
+            switchTab('agenda');
+            render();
+        });
+    }
+    if (DOM.dashMorningCard) {
+        DOM.dashMorningCard.addEventListener('click', () => {
+            if (DOM.fTurno) DOM.fTurno.value = DOM.fTurno.value === 'Manhã' ? '' : 'Manhã';
+            switchTab('agenda');
+            render();
+        });
+    }
+    if (DOM.dashAfternoonCard) {
+        DOM.dashAfternoonCard.addEventListener('click', () => {
+            if (DOM.fTurno) DOM.fTurno.value = DOM.fTurno.value === 'Tarde' ? '' : 'Tarde';
+            switchTab('agenda');
+            render();
+        });
+    }
+
     function getFilteredAppointments({ ignoreTurno = false, ignoreEscola = false } = {}) {
         const { dateRef } = getDateFilterInfo();
         const baseList = getAppointmentsForDate(dateRef);
@@ -657,17 +869,59 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // ---- Main Render Function (TEA Card Format) ----
+    // ---- Main Render Function (TEA Card Format & Timeline Modal Auditoria) ----
     function render() {
         updateDisplayDateLabel();
+        updateClearFiltersButton();
         const { dateRef } = getDateFilterInfo();
         let filtered = getFilteredAppointments();
         filtered.sort((a, b) => (a.inicio || '24:00').localeCompare(b.inicio || '24:00'));
 
         const activeFiltered = filtered.filter(a => a.status !== 'CANCELADO');
         if (DOM.dashTotal) DOM.dashTotal.textContent = activeFiltered.length;
-        if (DOM.dashMorning) DOM.dashMorning.textContent = filtered.filter(a => normalizeTurnoLabel(a.turno, a.inicio) === 'Manhã').length;
-        if (DOM.dashAfternoon) DOM.dashAfternoon.textContent = filtered.filter(a => normalizeTurnoLabel(a.turno, a.inicio) === 'Tarde').length;
+
+        const byTurnoBase = getFilteredAppointments({ ignoreTurno: true }).filter(a => a.status !== 'CANCELADO');
+        if (DOM.dashMorning) DOM.dashMorning.textContent = byTurnoBase.filter(a => normalizeTurnoLabel(a.turno, a.inicio) === 'Manhã').length;
+        if (DOM.dashAfternoon) DOM.dashAfternoon.textContent = byTurnoBase.filter(a => normalizeTurnoLabel(a.turno, a.inicio) === 'Tarde').length;
+
+        // ---- Contagem de Instituições Diferentes (Resumo) ----
+        const byEscolaBase = getFilteredAppointments({ ignoreEscola: true }).filter(a => a.status !== 'CANCELADO');
+        const schoolCounts = new Map();
+        byEscolaBase.forEach(item => {
+            const school = (item.escola || '').trim();
+            if (school) schoolCounts.set(school, (schoolCounts.get(school) || 0) + 1);
+        });
+
+        if (DOM.dashSchoolsCount) DOM.dashSchoolsCount.textContent = schoolCounts.size;
+
+        if (DOM.dashSchools) {
+            DOM.dashSchools.innerHTML = '';
+            const sortedSchools = Array.from(schoolCounts.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+            if (sortedSchools.length === 0) {
+                DOM.dashSchools.innerHTML = '<div class="text-xs font-semibold text-text-muted p-2">Nenhuma instituição registrada para hoje.</div>';
+            } else {
+                sortedSchools.forEach(([school, count]) => {
+                    const row = document.createElement('div');
+                    row.className = 'flex justify-between items-center p-3 rounded-lg cursor-pointer transition-all';
+                    row.style.cssText = 'background: var(--surface-card); border: 1px solid var(--border-main);';
+                    if (DOM.fEscola && DOM.fEscola.value === school) {
+                        row.style.borderColor = 'var(--tea-blue)';
+                        row.style.background = 'var(--tea-blue-light)';
+                    }
+                    row.innerHTML = `
+                        <span class="font-bold text-sm" style="color: var(--text-primary);">${escapeHtml(school)}</span>
+                        <span style="background: var(--tea-violet-light); color: var(--tea-violet); font-weight: 800; padding: 4px 12px; border-radius: 99px; font-size: 0.85rem;">${count}</span>
+                    `;
+                    row.addEventListener('click', () => {
+                        if (!DOM.fEscola) return;
+                        DOM.fEscola.value = DOM.fEscola.value === school ? '' : school;
+                        switchTab('agenda');
+                        render();
+                    });
+                    DOM.dashSchools.appendChild(row);
+                });
+            }
+        }
 
         DOM.agendaList.innerHTML = '';
 
@@ -690,6 +944,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const allowedSteps = getProgressStepsForTransport(item.transporte);
             const monitorOptions = MONITORAS.map(m => `<option value="${escapeHtml(m)}" ${todayMonitor === m ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('');
 
+            // Contagem de auditorias registradas
+            let auditCount = 0;
+            allowedSteps.forEach(step => { if (statusParts.includes(step.code)) auditCount++; });
+            if (isCancelled && (item.ausenciaMotivo || item.ausenciaGps)) auditCount++;
+
             const stepperHtml = allowedSteps.map(step => {
                 const completed = statusParts.includes(step.code);
                 const timestamp = item[step.timeField] || '';
@@ -705,7 +964,7 @@ document.addEventListener('DOMContentLoaded', () => {
             card.className = `agenda-card ${turnoClass} ${cardOpacity}`;
             card.innerHTML = `
                 <div class="card-top-bar">
-                    <div>
+                    <div class="card-header-left">
                         <div class="card-badges-group">
                             <span class="badge-time"><i class="ph ph-clock"></i> ${escapeHtml(item.inicio || '--')} às ${escapeHtml(item.termino || '--')}</span>
                             <span class="badge-turno">${escapeHtml(turnoLabel)}</span>
@@ -731,7 +990,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
 
                 <div class="card-chips-row">
-                    <span class="badge-transport"><i class="ph ph-bus"></i> ${item.transporte || 'Ida e Volta'}</span>
+                    <div class="chips-left-group">
+                        <span class="badge-transport"><i class="ph ph-bus"></i> ${item.transporte || 'Ida e Volta'}</span>
+                        <button type="button" class="btn-audit-gps" data-action="audit-gps" data-id="${escapeHtml(item.id)}" data-date="${escapeHtml(dateRef)}">
+                            <i class="ph ph-map-pin"></i> GPS (${auditCount})
+                        </button>
+                    </div>
                     ${!isCancelled ? `<a href="${wppLink}" target="_blank" class="whatsapp-float-btn" title="WhatsApp"><i class="ph ph-whatsapp-logo"></i></a>` : ''}
                 </div>
 
@@ -762,8 +1026,8 @@ document.addEventListener('DOMContentLoaded', () => {
         MONITORAS.forEach((m, idx) => {
             const row = document.createElement('div');
             row.className = 'agenda-card flex justify-between items-center';
-            row.style.cssText = 'padding: 12px 16px; border-left: 4px solid var(--tea-violet);';
-            row.innerHTML = `<span class="font-bold">${escapeHtml(m)}</span><button type="button" class="icon-btn-card delete" onclick="removeMonitor(${idx})"><i class="ph ph-trash"></i></button>`;
+            row.style.cssText = 'padding: 14px 18px; border-left: 4px solid var(--tea-violet);';
+            row.innerHTML = `<span class="font-bold text-base">${escapeHtml(m)}</span><button type="button" class="icon-btn-card delete" onclick="removeMonitor(${idx})"><i class="ph ph-trash"></i></button>`;
             container.appendChild(row);
         });
     }
@@ -795,12 +1059,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ---- Interaction Listeners ----
     if (DOM.agendaList) {
-        DOM.agendaList.addEventListener('click', (event) => {
+        DOM.agendaList.addEventListener('click', async (event) => {
             const button = event.target.closest('[data-action]');
             if (!button) return;
             const action = button.dataset.action;
 
-            if (action === 'progress') {
+            if (action === 'audit-gps') {
+                const currentList = getAppointmentsForDate(button.dataset.date);
+                const item = currentList.find(a => String(a.id) === String(button.dataset.id));
+                if (item) openGpsAuditModal(item, button.dataset.date);
+            } else if (action === 'progress') {
                 const currentList = getAppointmentsForDate(button.dataset.date);
                 const rawItem = currentList.find(a => String(a.id) === String(button.dataset.id));
                 if (!rawItem) return;
@@ -808,17 +1076,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 const item = ensureConcreteRecord(rawItem, button.dataset.date);
                 const step = getProgressStep(button.dataset.stepCode);
                 let parts = getStatusParts(item.status).filter(p => p !== 'CANCELADO');
+
                 if (parts.includes(button.dataset.stepCode)) {
                     parts = parts.filter(p => p !== button.dataset.stepCode);
                     item[step.timeField] = '';
+                    item[step.gpsField] = '';
                 } else {
                     parts.push(button.dataset.stepCode);
                     item[step.timeField] = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                    showToast('Obtendo localização GPS...', 'info');
+                    const coords = await captureGeolocation();
+                    item[step.gpsField] = coords;
                 }
                 item.status = parts.join(',');
                 localStorage.setItem('lumina_agenda_cache', JSON.stringify(appointments));
                 render();
-                supabaseUpdateAppointment(item);
+                await supabaseUpdateAppointment(item);
+                if (parts.includes(button.dataset.stepCode)) {
+                    showToast(`Passo ${step.label} registrado! ${item[step.gpsField] ? '📍 GPS capturado' : ''}`);
+                }
             } else if (action === 'absence') {
                 const currentList = getAppointmentsForDate(button.dataset.date);
                 const rawItem = currentList.find(a => String(a.id) === String(button.dataset.id));
@@ -826,15 +1102,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 const item = ensureConcreteRecord(rawItem, button.dataset.date);
 
                 if (item.status === 'CANCELADO') {
-                    item.status = ''; item.ausenciaMotivo = '';
+                    item.status = ''; item.ausenciaMotivo = ''; item.ausenciaTimestamp = ''; item.ausenciaGps = '';
                 } else {
                     const reason = prompt(`Motivo da ausência de ${button.dataset.patient}:`);
                     if (!reason || !reason.trim()) return;
-                    item.status = 'CANCELADO'; item.ausenciaMotivo = reason.trim();
+                    item.status = 'CANCELADO';
+                    item.ausenciaMotivo = reason.trim();
+                    item.ausenciaTimestamp = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                    showToast('Obtendo localização GPS...', 'info');
+                    const coords = await captureGeolocation();
+                    item.ausenciaGps = coords;
                 }
                 localStorage.setItem('lumina_agenda_cache', JSON.stringify(appointments));
                 render();
-                supabaseUpdateAppointment(item);
+                await supabaseUpdateAppointment(item);
             } else if (action === 'edit') {
                 openDrawer('edit', button.dataset.id);
             } else if (action === 'delete') {
