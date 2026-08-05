@@ -2,141 +2,212 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Transporte - Novo Olhar</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Transporte Especial - Novo Olhar (TEA)</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#f6f7fb">
+    <meta name="theme-color" content="#2563eb">
     <link rel="apple-touch-icon" href="logo-ong.png">
-    <link rel="stylesheet" href="style.css?v=27">
+    <link rel="stylesheet" href="style.css?v=28">
 </head>
 <body class="viewer-mode">
-    <aside class="app-sidebar">
-        <div class="brand-block">
+
+    <!-- Topbar Header Fixo -->
+    <header class="app-header">
+        <div class="brand-wrapper">
             <img src="logo-ong.png" alt="Novo Olhar">
-            <div>
+            <div class="brand-title-group">
                 <h1>Transporte Novo Olhar</h1>
-                <p>Agenda 2026</p>
+                <p>Agenda TEA 2026</p>
             </div>
         </div>
-
-        <div class="quick-actions">
-            <button id="btnAdminLogin" title="Acesso Admin"><i class="ph ph-lock-key"></i></button>
-            <button id="btnAdminLogout" class="hidden" title="Sair do Admin"><i class="ph ph-lock-key-open"></i></button>
-            <button id="btnManageMonitorsMobile" class="admin-only" title="Monitoras"><i class="ph ph-users-three"></i></button>
-            <button id="btnDownloadExcelTemplateMobile" class="admin-only" title="Modelo Excel"><i class="ph ph-file-xls"></i></button>
-            <button id="btnImportExcelMobile" class="admin-only" title="Importar"><i class="ph ph-upload-simple"></i></button>
-            <button id="btnReportMobile" class="admin-only" title="Relatório PDF"><i class="ph ph-file-pdf"></i></button>
-        </div>
-
-        <nav class="desktop-nav">
-            <a href="#" id="navAgenda"><i class="ph ph-squares-four"></i> Visão Geral</a>
-            <button id="btnManageMonitors" class="admin-only"><i class="ph ph-users-three"></i> Monitoras</button>
-            <button id="btnDownloadExcelTemplate" class="admin-only"><i class="ph ph-file-xls"></i> Modelo Excel</button>
-            <button id="btnImportExcel" class="admin-only"><i class="ph ph-upload-simple"></i> Importar Planilha</button>
-            <button id="btnReport" class="admin-only"><i class="ph ph-file-pdf"></i> Relatório PDF</button>
-        </nav>
-
-        <button id="btnNewAppointment" class="primary-action admin-only"><i class="ph ph-plus-circle"></i> Novo atendimento</button>
-    </aside>
-
-    <main id="mainContainer" class="app-main">
-        <header class="topbar">
-            <div class="today-bar">
-                <div class="clock-box"><i class="ph ph-clock"></i><span id="liveClock">--:--</span></div>
-                <div class="count-box"><span id="appointmentCountMobile">0</span> atendimentos</div>
+        <div class="header-right-actions">
+            <div class="live-clock-badge">
+                <i class="ph ph-clock"></i>
+                <span id="liveClock">--:--</span>
             </div>
+            <button id="btnAdminLogin" class="header-btn" title="Acesso Coordenador"><i class="ph ph-lock-key"></i></button>
+            <button id="btnAdminLogout" class="header-btn hidden" title="Sair do Modo Admin"><i class="ph ph-lock-key-open"></i></button>
+        </div>
+    </header>
 
-            <section class="filters-panel" aria-label="Filtros">
-                <div class="date-control">
-                    <button id="btnPrevDay" type="button" aria-label="Dia anterior"><i class="ph ph-caret-left"></i></button>
-                    <input type="date" id="filterDataRef">
-                    <button id="btnNextDay" type="button" aria-label="Próximo dia"><i class="ph ph-caret-right"></i></button>
+    <!-- Faixa Seletora de Data & Filtros -->
+    <section class="date-nav-bar">
+        <div class="date-picker-row">
+            <button id="btnPrevDay" class="date-arrow-btn" type="button" aria-label="Dia Anterior"><i class="ph ph-caret-left"></i></button>
+            <div class="date-display-box">
+                <input type="date" id="filterDataRef">
+                <div class="date-display-text">
+                    <i class="ph ph-calendar-blank"></i>
+                    <span id="displayDateLabel">Carregando...</span>
                 </div>
-                <label class="search-control">
-                    <i class="ph ph-magnifying-glass"></i>
-                    <input type="text" id="filterPaciente" placeholder="Buscar paciente">
-                </label>
-                <select id="filterProfissional">
-                    <option value="">Profissionais</option>
-                </select>
-                <select id="filterTurno">
-                    <option value="">Turnos</option>
-                    <option value="Manhã">Manhã</option>
-                    <option value="Tarde">Tarde</option>
-                </select>
-                <select id="filterEscola">
-                    <option value="">Instituições</option>
-                </select>
-                <button id="btnClearFilters" class="clear-filters hidden" type="button"><i class="ph ph-funnel-x"></i> Limpar filtros</button>
-            </section>
-
-            <div class="desktop-count"><span id="appointmentCount">0</span> agendamentos</div>
-        </header>
-
-        <section id="dashboardPanel" class="dashboard-panel">
-            <button type="button" id="dashTotalCard" class="metric-card">
-                <span>Atendimentos</span>
-                <strong id="dashTotal">0</strong>
-                <small id="dashDateLabel">Hoje</small>
-            </button>
-            <button type="button" id="dashMorningCard" class="metric-card">
-                <span>Manhã</span>
-                <strong id="dashMorning">0</strong>
-                <small>Filtrar</small>
-            </button>
-            <button type="button" id="dashAfternoonCard" class="metric-card">
-                <span>Tarde</span>
-                <strong id="dashAfternoon">0</strong>
-                <small>Filtrar</small>
-            </button>
-            <div class="summary-card">
-                <div class="summary-title">Instituições <strong id="dashSchoolsCount">0</strong></div>
-                <div id="dashSchools" class="summary-list"><div>Sem dados</div></div>
             </div>
-            <div class="summary-card">
-                <div class="summary-title">Monitoras <strong id="dashMonitorsCount">0</strong></div>
-                <div id="dashMonitors" class="summary-list"></div>
+            <button id="btnNextDay" class="date-arrow-btn" type="button" aria-label="Próximo Dia"><i class="ph ph-caret-right"></i></button>
+        </div>
+
+        <div class="filters-scroll-row">
+            <div class="search-input-box">
+                <i class="ph ph-magnifying-glass"></i>
+                <input type="text" id="filterPaciente" placeholder="Buscar por paciente...">
+            </div>
+            <select id="filterProfissional" class="filter-select">
+                <option value="">Profissionais</option>
+            </select>
+            <select id="filterTurno" class="filter-select">
+                <option value="">Turnos</option>
+                <option value="Manhã">Manhã</option>
+                <option value="Tarde">Tarde</option>
+            </select>
+            <select id="filterEscola" class="filter-select">
+                <option value="">Instituições</option>
+            </select>
+            <button id="btnClearFilters" class="clear-filter-btn hidden" type="button"><i class="ph ph-funnel-x"></i> Limpar</button>
+        </div>
+    </section>
+
+    <!-- Área Principal (App Viewport) -->
+    <main class="app-viewport">
+        <!-- Aba 1: Agenda de Atendimentos -->
+        <section id="tabAgenda" class="tab-content active">
+            <div id="agendaList" class="agenda-cards-list"></div>
+        </section>
+
+        <!-- Aba 2: Gerenciamento de Monitoras -->
+        <section id="tabMonitors" class="tab-content">
+            <div class="metric-card-app violet mb-4">
+                <span>Gerenciamento de Equipe</span>
+                <strong>Monitoras Cadastradas</strong>
+            </div>
+            <div class="card-info-grid mb-4" style="grid-template-columns: 1fr auto;">
+                <input type="text" id="newMonitorName" placeholder="Nome da nova monitora" style="height: 44px; padding: 0 12px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; font-weight: 600;">
+                <button id="btnAddMonitor" type="button" class="btn-primary-tea" style="padding: 0 16px;"><i class="ph ph-plus-circle"></i> Adicionar</button>
+            </div>
+            <div id="monitorsList" class="agenda-cards-list"></div>
+        </section>
+
+        <!-- Aba 3: Resumo & Métricas -->
+        <section id="tabMetrics" class="tab-content">
+            <div class="metrics-grid-tab">
+                <button type="button" id="dashTotalCard" class="metric-card-app blue">
+                    <span>Atendimentos do Dia</span>
+                    <strong id="dashTotal">0</strong>
+                </button>
+                <button type="button" id="dashMorningCard" class="metric-card-app yellow">
+                    <span>Turno Manhã</span>
+                    <strong id="dashMorning">0</strong>
+                </button>
+                <button type="button" id="dashAfternoonCard" class="metric-card-app green">
+                    <span>Turno Tarde</span>
+                    <strong id="dashAfternoon">0</strong>
+                </button>
+            </div>
+
+            <div class="metric-card-app violet">
+                <div class="flex justify-between items-center mb-2">
+                    <span style="color: var(--text-primary); font-size: 0.85rem;">Instituições atendidas hoje</span>
+                    <strong id="dashSchoolsCount" style="font-size: 1.1rem; color: var(--tea-violet-dark);">0</strong>
+                </div>
+                <div id="dashSchools" class="flex flex-col gap-2"></div>
             </div>
         </section>
 
-        <section id="agendaBoard" class="agenda-board">
-            <div id="agendaList" class="agenda-list"></div>
+        <!-- Aba 4: Gerador de Relatórios -->
+        <section id="tabReports" class="tab-content">
+            <div class="metric-card-app blue mb-4">
+                <span>Relatório PDF</span>
+                <strong>Gerar Relatório por Período</strong>
+            </div>
+            <div class="agenda-card">
+                <div class="form-group-mobile">
+                    <label>Data Inicial</label>
+                    <input type="date" id="reportStartDate">
+                </div>
+                <div class="form-group-mobile">
+                    <label>Data Final</label>
+                    <input type="date" id="reportEndDate">
+                </div>
+                <button id="btnGenerateReport" type="button" class="btn-primary-tea"><i class="ph ph-file-pdf"></i> Gerar Relatório PDF</button>
+            </div>
         </section>
     </main>
 
-    <button id="btnNewAppointmentMobile" class="floating-new admin-only" type="button"><i class="ph ph-plus"></i></button>
+    <!-- Barra de Navegação Inferior Móvel (Bottom Navigation Bar) -->
+    <nav class="mobile-bottom-nav">
+        <button id="navBtnAgenda" class="nav-item-btn active" type="button">
+            <i class="ph ph-calendar-blank"></i>
+            <span>Agenda</span>
+        </button>
+        <button id="navBtnMonitors" class="nav-item-btn admin-only" type="button">
+            <i class="ph ph-users-three"></i>
+            <span>Monitoras</span>
+        </button>
+        <button id="navBtnNew" class="fab-center-btn admin-only" type="button" title="Novo Agendamento">
+            <i class="ph ph-plus"></i>
+        </button>
+        <button id="navBtnMetrics" class="nav-item-btn" type="button">
+            <i class="ph ph-chart-pie-slice"></i>
+            <span>Resumo</span>
+        </button>
+        <button id="navBtnReports" class="nav-item-btn admin-only" type="button">
+            <i class="ph ph-file-pdf"></i>
+            <span>Relatórios</span>
+        </button>
+    </nav>
+
+    <!-- Inputs ocultos para importação -->
     <input type="file" id="excelImportInput" class="hidden" accept=".xlsx,.xls,.csv">
 
-    <div id="drawerOverlay" class="overlay hidden-layer"></div>
-    <aside id="drawer" class="drawer">
-        <div class="drawer-head">
-            <h2 id="drawerTitle">Novo atendimento</h2>
-            <button id="closeDrawer" type="button"><i class="ph ph-x"></i></button>
+    <!-- Bottom Sheet Form (Drawer Móvel) -->
+    <div id="drawerOverlay" class="overlay-backdrop"></div>
+    <aside id="drawer" class="bottom-sheet">
+        <div class="sheet-handle-bar"></div>
+        <div class="sheet-header">
+            <h2 id="drawerTitle">Novo Agendamento</h2>
+            <button id="closeDrawer" type="button"><i class="ph ph-x text-xl"></i></button>
         </div>
-        <form id="appointmentForm" class="drawer-form">
+        <form id="appointmentForm" class="sheet-form-body">
             <input type="hidden" id="formId">
-            <label id="editScopeGroup" class="edit-scope hidden">Aplicar edição
+            <div id="editScopeGroup" class="form-group-mobile hidden" style="background: var(--tea-blue-light); padding: 10px; border-radius: 12px;">
+                <label style="color: var(--tea-blue-dark);">Aplicar edição em:</label>
                 <select id="editScope">
-                    <option value="day">Apenas este atendimento do dia</option>
-                    <option value="patient">Toda a série recorrente (mesmo dia, horário e profissional)</option>
+                    <option value="day">Apenas este dia especificamente</option>
+                    <option value="patient">Toda a série recorrente</option>
                 </select>
-            </label>
-            <div class="form-grid">
-                <label>Profissional<input type="text" id="formProfissional" required placeholder="Ex: Juliana"></label>
-                <label>Atendimento<input type="text" id="formTipo" required placeholder="Ex: Psicóloga"></label>
             </div>
-            <label>Paciente<input type="text" id="formPaciente" required placeholder="Nome completo"></label>
-            <label>Data início<input type="date" id="formDataInicio" required></label>
-            <div class="form-grid">
-                <label>Início<input type="time" id="formInicio" required></label>
-                <label>Término<input type="time" id="formTermino" required></label>
+            <div class="form-row-2">
+                <div class="form-group-mobile">
+                    <label>Profissional</label>
+                    <input type="text" id="formProfissional" required placeholder="Ex: Juliana">
+                </div>
+                <div class="form-group-mobile">
+                    <label>Atendimento</label>
+                    <input type="text" id="formTipo" required placeholder="Ex: Psicóloga">
+                </div>
             </div>
-            <div class="form-grid">
-                <label>Instituição
+            <div class="form-group-mobile">
+                <label>Paciente</label>
+                <input type="text" id="formPaciente" required placeholder="Nome completo">
+            </div>
+            <div class="form-group-mobile">
+                <label>Data de Início da Série</label>
+                <input type="date" id="formDataInicio" required>
+            </div>
+            <div class="form-row-2">
+                <div class="form-group-mobile">
+                    <label>Início</label>
+                    <input type="time" id="formInicio" required>
+                </div>
+                <div class="form-group-mobile">
+                    <label>Término</label>
+                    <input type="time" id="formTermino" required>
+                </div>
+            </div>
+            <div class="form-row-2">
+                <div class="form-group-mobile">
+                    <label>Instituição</label>
                     <select id="formEscola">
                         <option value="">Selecione...</option>
                         <option value="EE FLORIANO SARETTI">EE FLORIANO SARETTI</option>
@@ -159,66 +230,46 @@
                         <option value="APAE">APAE</option>
                         <option value="LAR">LAR</option>
                         <option value="ACAE">ACAE</option>
+                        <option value="EBENEZER">EBENEZER</option>
                     </select>
-                </label>
-                <label>Telefone<input type="tel" id="formTelefone" placeholder="11999999999"></label>
+                </div>
+                <div class="form-group-mobile">
+                    <label>Telefone</label>
+                    <input type="tel" id="formTelefone" placeholder="11999999999">
+                </div>
             </div>
-            <label>Trajeto
+            <div class="form-group-mobile">
+                <label>Trajeto de Transporte</label>
                 <select id="formTransporte">
-                    <option value="Ambos">Entrada e Saída</option>
+                    <option value="Ambos">Entrada e Saída (Ida e Volta)</option>
                     <option value="Entrada">Somente Entrada</option>
                     <option value="Saída">Somente Saída</option>
                 </select>
-            </label>
-            <label>Observações<input type="text" id="formObs" placeholder="Ex: CONFIRMADO"></label>
-            <button type="submit" class="save-button">Salvar</button>
+            </div>
+            <div class="form-group-mobile">
+                <label>Observações</label>
+                <input type="text" id="formObs" placeholder="Ex: CONFIRMADO">
+            </div>
+            <button type="submit" class="btn-primary-tea">Salvar Agendamento</button>
         </form>
     </aside>
 
-    <div id="monitorsModalOverlay" class="modal-overlay">
-        <div id="monitorsModal" class="modal-card">
-            <div class="modal-head">
-                <h3>Monitoras</h3>
-                <button id="btnCloseMonitors" type="button"><i class="ph ph-x"></i></button>
-            </div>
-            <div class="inline-form">
-                <input type="text" id="newMonitorName" placeholder="Nome da monitora">
-                <button id="btnAddMonitor" type="button"><i class="ph ph-plus-circle"></i> Add</button>
-            </div>
-            <div id="monitorsList" class="monitors-list"></div>
-            <button id="btnSaveMonitors" type="button" class="save-button">Concluído</button>
+    <!-- Modal de Confirmação Mobile -->
+    <div id="confirmModalOverlay" class="overlay-backdrop"></div>
+    <div id="confirmModal" class="modal-center-card">
+        <div id="confirmModalIcon" style="width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; margin: 0 auto 12px; background: var(--tea-blue-light); color: var(--tea-blue);"><i class="ph ph-question"></i></div>
+        <h3 id="confirmModalTitle" style="text-align: center; font-weight: 800; font-size: 1.1rem; margin-bottom: 6px;">Confirmar Ação</h3>
+        <p id="confirmModalMessage" style="text-align: center; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 16px;">Deseja realizar esta ação?</p>
+        <div class="form-row-2">
+            <button id="btnConfirmCancel" type="button" style="height: 44px; border-radius: 12px; background: var(--surface-subtle); font-weight: 700; color: var(--text-primary);">Cancelar</button>
+            <button id="btnConfirmOk" type="button" class="btn-primary-tea">Confirmar</button>
         </div>
     </div>
 
-    <div id="confirmModalOverlay" class="modal-overlay">
-        <div id="confirmModal" class="modal-card confirm-card">
-            <div id="confirmModalIcon" class="confirm-icon"><i class="ph ph-question"></i></div>
-            <h3 id="confirmModalTitle">Confirmar</h3>
-            <p id="confirmModalMessage">Tem certeza que deseja realizar esta ação?</p>
-            <div class="confirm-actions">
-                <button id="btnConfirmCancel" type="button">Cancelar</button>
-                <button id="btnConfirmOk" type="button">Confirmar</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="reportModalOverlay" class="modal-overlay">
-        <div id="reportModal" class="modal-card">
-            <div class="modal-head">
-                <h3>Relatório de atendimentos</h3>
-                <button id="btnCloseReport" type="button"><i class="ph ph-x"></i></button>
-            </div>
-            <div class="report-form">
-                <label>Data inicial<input type="date" id="reportStartDate"></label>
-                <label>Data final<input type="date" id="reportEndDate"></label>
-                <button id="btnGenerateReport" type="button" class="save-button"><i class="ph ph-file-pdf"></i> Gerar PDF</button>
-            </div>
-        </div>
-    </div>
-
+    <!-- Container de Toasts -->
     <div id="toastContainer" class="toast-container"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script src="app.js?v=27"></script>
+    <script src="app.js?v=28"></script>
 </body>
 </html>
