@@ -68,11 +68,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const icon = type === 'error' ? 'ph-warning-circle' : type === 'info' ? 'ph-info' : 'ph-check-circle';
         const colorClass = type === 'error' ? 'var(--tea-red)' : type === 'info' ? 'var(--tea-blue)' : 'var(--tea-green)';
         toast.className = 'agenda-card';
-        toast.style.cssText = `position: fixed; top: 16px; right: 16px; z-index: 200; padding: 12px 16px; border-left: 4px solid ${colorClass}; box-shadow: var(--shadow-sheet); animation: slideIn 0.3s ease;`;
-        toast.innerHTML = `<div class="flex items-center gap-2 font-bold" style="font-size:0.88rem;"><i class="ph ${icon} text-xl" style="color:${colorClass};"></i><span>${message}</span></div>`;
+        toast.style.cssText = `position: fixed; top: 16px; right: 16px; z-index: 200; padding: 10px 14px; border-left: 4px solid ${colorClass}; box-shadow: var(--shadow-sheet); animation: slideIn 0.3s ease;`;
+        toast.innerHTML = `<div class="flex items-center gap-2 font-bold" style="font-size:0.85rem;"><i class="ph ${icon} text-lg" style="color:${colorClass};"></i><span>${message}</span></div>`;
         container.appendChild(toast);
 
-        setTimeout(() => toast.remove(), 3400);
+        setTimeout(() => toast.remove(), 3200);
     }
 
     // ---- Sistema de Captura de Geolocalização (GPS) ----
@@ -596,7 +596,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     DOM.btnConfirmCancel.addEventListener('click', closeConfirmationModal);
 
-    // ---- Modal de Auditoria GPS Timeline (REFEITO DO ZERO) ----
+    // ---- Modal de Auditoria GPS Timeline ----
     function openGpsAuditModal(item, dateRef) {
         if (!DOM.gpsModal) return;
         DOM.gpsModalAvatar.textContent = getInitials(item.paciente);
@@ -608,7 +608,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const isCancelled = item.status === 'CANCELADO';
 
         if (isCancelled) {
-            DOM.gpsModalStatusBadge.textContent = 'Ausente';
+            DOM.gpsModalStatusBadge.textContent = 'Cancelado';
             DOM.gpsModalStatusBadge.className = 'badge-status-chip ausencia';
         } else if (allowedSteps.every(s => statusParts.includes(s.code))) {
             DOM.gpsModalStatusBadge.textContent = 'Concluído';
@@ -634,7 +634,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let hasTimelineItems = false;
 
-        // Passos do transporte
         allowedSteps.forEach(step => {
             const isDone = statusParts.includes(step.code);
             const timeStr = item[step.timeField] || '';
@@ -667,23 +666,22 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // Registro de ausência em timeline
         if (isCancelled) {
             hasTimelineItems = true;
             const mapsUrl = item.ausenciaGps ? `https://www.google.com/maps?q=${item.ausenciaGps}` : null;
             const absenceEl = document.createElement('div');
             absenceEl.className = 'timeline-step-item ausencia';
             absenceEl.innerHTML = `
-                <div class="timeline-dot"><i class="ph ph-x"></i></div>
+                <div class="timeline-dot"><i class="ph ph-ban"></i></div>
                 <div class="timeline-content-card" style="border-color: var(--tea-red-border); background: var(--tea-red-light);">
                     <div class="timeline-title-row">
-                        <strong style="color: var(--tea-red);"><i class="ph ph-x-circle"></i> Ausência Confirmada</strong>
+                        <strong style="color: var(--tea-red);"><i class="ph ph-x-circle"></i> Cancelado pelo Usuário</strong>
                         ${item.ausenciaTimestamp ? `<span class="timeline-time-pill" style="background: var(--tea-red); color: #fff;">${escapeHtml(item.ausenciaTimestamp)}</span>` : ''}
                     </div>
                     ${item.ausenciaMotivo ? `<div class="text-xs font-bold" style="color: var(--text-primary);">Motivo: "${escapeHtml(item.ausenciaMotivo)}"</div>` : ''}
                     ${mapsUrl ? `
                         <a href="${mapsUrl}" target="_blank" class="btn-maps-link" style="background: var(--tea-red);">
-                            <i class="ph ph-map-pin"></i> Ver Local da Ausência no Maps
+                            <i class="ph ph-map-pin"></i> Ver Local do Cancelamento no Maps
                         </a>
                     ` : ''}
                 </div>
@@ -694,7 +692,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (hasTimelineItems) {
             DOM.gpsModalBody.appendChild(trackGroup);
         } else {
-            DOM.gpsModalBody.innerHTML = '<div class="text-center text-muted font-bold py-8 text-sm">Nenhum evento ou localização de transporte foi registrado até o momento.</div>';
+            DOM.gpsModalBody.innerHTML = '<div class="text-center text-muted font-bold py-8 text-sm">Nenhum evento de transporte registrado.</div>';
         }
 
         DOM.gpsModalOverlay.classList.add('active');
@@ -869,7 +867,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // ---- Main Render Function (TEA Card Format & Timeline Modal Auditoria) ----
+    // ---- Main Render Function (HORIZONTAL TRACKING LINE) ----
     function render() {
         updateDisplayDateLabel();
         updateClearFiltersButton();
@@ -902,7 +900,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 sortedSchools.forEach(([school, count]) => {
                     const row = document.createElement('div');
-                    row.className = 'flex justify-between items-center p-3 rounded-lg cursor-pointer transition-all';
+                    row.className = 'flex justify-between items-center p-2 rounded-lg cursor-pointer transition-all';
                     row.style.cssText = 'background: var(--surface-card); border: 1px solid var(--border-main);';
                     if (DOM.fEscola && DOM.fEscola.value === school) {
                         row.style.borderColor = 'var(--tea-blue)';
@@ -910,7 +908,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     row.innerHTML = `
                         <span class="font-bold text-sm" style="color: var(--text-primary);">${escapeHtml(school)}</span>
-                        <span style="background: var(--tea-violet-light); color: var(--tea-violet); font-weight: 800; padding: 4px 12px; border-radius: 99px; font-size: 0.85rem;">${count}</span>
+                        <span style="background: var(--tea-violet-light); color: var(--tea-violet); font-weight: 800; padding: 2px 10px; border-radius: 99px; font-size: 0.82rem;">${count}</span>
                     `;
                     row.addEventListener('click', () => {
                         if (!DOM.fEscola) return;
@@ -926,7 +924,7 @@ document.addEventListener('DOMContentLoaded', () => {
         DOM.agendaList.innerHTML = '';
 
         if (filtered.length === 0) {
-            DOM.agendaList.innerHTML = `<div class="agenda-card text-center text-muted font-bold py-8">Nenhum atendimento para a data selecionada.</div>`;
+            DOM.agendaList.innerHTML = `<div class="agenda-card text-center text-muted font-bold py-6">Nenhum atendimento para a data selecionada.</div>`;
             return;
         }
 
@@ -949,15 +947,31 @@ document.addEventListener('DOMContentLoaded', () => {
             allowedSteps.forEach(step => { if (statusParts.includes(step.code)) auditCount++; });
             if (isCancelled && (item.ausenciaMotivo || item.ausenciaGps)) auditCount++;
 
-            const stepperHtml = allowedSteps.map(step => {
+            // Cálculo do preenchimento da linha de progresso
+            let maxIndex = -1;
+            allowedSteps.forEach((step, idx) => {
+                if (statusParts.includes(step.code)) maxIndex = idx;
+            });
+
+            let fillPercent = 0;
+            if (allowedSteps.length > 1 && maxIndex >= 0) {
+                fillPercent = (maxIndex / (allowedSteps.length - 1)) * 100;
+            } else if (allowedSteps.length === 1 && maxIndex >= 0) {
+                fillPercent = 100;
+            }
+
+            const trackerNodesHtml = allowedSteps.map(step => {
                 const completed = statusParts.includes(step.code);
                 const timestamp = item[step.timeField] || '';
                 return `
-                    <button type="button" ${isCancelled ? 'disabled' : ''} data-action="progress" data-id="${escapeHtml(item.id)}" data-date="${escapeHtml(dateRef)}" data-step-code="${escapeHtml(step.code)}" data-patient="${escapeHtml(item.paciente)}" class="step-btn-mobile ${completed ? 'completed' : ''}">
-                        <div class="step-icon"><i class="ph ${completed ? 'ph-check' : step.icon}"></i></div>
-                        <span class="step-label">${escapeHtml(step.label)}</span>
-                        ${timestamp ? `<span class="step-time">${escapeHtml(timestamp)}</span>` : ''}
-                    </button>`;
+                    <button type="button" ${isCancelled ? 'disabled' : ''} data-action="progress" data-id="${escapeHtml(item.id)}" data-date="${escapeHtml(dateRef)}" data-step-code="${escapeHtml(step.code)}" data-patient="${escapeHtml(item.paciente)}" class="tracker-node-item ${completed ? 'completed' : ''}">
+                        <div class="tracker-circle">
+                            <i class="ph ${completed ? 'ph-check' : step.icon}"></i>
+                        </div>
+                        <span class="tracker-node-label">${escapeHtml(step.label)}</span>
+                        ${timestamp ? `<span class="tracker-time-pill">${escapeHtml(timestamp)}</span>` : ''}
+                    </button>
+                `;
             }).join('');
 
             const card = document.createElement('div');
@@ -965,11 +979,11 @@ document.addEventListener('DOMContentLoaded', () => {
             card.innerHTML = `
                 <div class="card-top-bar">
                     <div class="card-header-left">
+                        <h3 class="patient-name-title">${escapeHtml(item.paciente)}</h3>
                         <div class="card-badges-group">
                             <span class="badge-time"><i class="ph ph-clock"></i> ${escapeHtml(item.inicio || '--')} às ${escapeHtml(item.termino || '--')}</span>
                             <span class="badge-turno">${escapeHtml(turnoLabel)}</span>
                         </div>
-                        <h3 class="patient-name-title">${escapeHtml(item.paciente)}</h3>
                     </div>
                     <div class="card-actions-admin admin-only">
                         <button type="button" class="icon-btn-card" data-action="edit" data-id="${escapeHtml(item.id)}"><i class="ph ph-pencil-simple"></i></button>
@@ -977,41 +991,44 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </div>
 
-                <div class="card-info-grid">
-                    <div>
-                        <div class="info-item-label">Profissional & Atendimento</div>
-                        <div class="info-item-value"><i class="ph ph-user"></i> ${escapeHtml(item.profissional)} &bull; ${escapeHtml(item.tipo)}</div>
+                <div class="card-compact-meta">
+                    <div class="meta-line-item">
+                        <i class="ph ph-user"></i>
+                        <span>${escapeHtml(item.profissional)} &bull; <strong>${escapeHtml(item.tipo)}</strong></span>
                     </div>
                     ${item.escola ? `
-                    <div>
-                        <div class="info-item-label">Instituição</div>
-                        <div class="info-item-value"><i class="ph ph-buildings"></i> ${escapeHtml(item.escola)}</div>
+                    <div class="meta-line-item">
+                        <i class="ph ph-buildings"></i>
+                        <span>${escapeHtml(item.escola)}</span>
                     </div>` : ''}
                 </div>
 
-                <div class="card-chips-row">
+                <div class="card-actions-strip">
                     <div class="chips-left-group">
                         <span class="badge-transport"><i class="ph ph-bus"></i> ${item.transporte || 'Ida e Volta'}</span>
                         <button type="button" class="btn-audit-gps" data-action="audit-gps" data-id="${escapeHtml(item.id)}" data-date="${escapeHtml(dateRef)}">
                             <i class="ph ph-map-pin"></i> GPS (${auditCount})
                         </button>
+                        ${!isCancelled ? `<a href="${wppLink}" target="_blank" class="whatsapp-float-btn" title="WhatsApp"><i class="ph ph-whatsapp-logo"></i></a>` : ''}
                     </div>
-                    ${!isCancelled ? `<a href="${wppLink}" target="_blank" class="whatsapp-float-btn" title="WhatsApp"><i class="ph ph-whatsapp-logo"></i></a>` : ''}
-                </div>
 
-                <div class="transport-action-block">
-                    <div class="monitor-selector-row">
-                        <span class="monitor-label">Monitora:</span>
-                        <select class="monitor-select-box daily-monitor-select" data-id="${escapeHtml(item.id)}" data-date="${escapeHtml(dateRef)}">
-                            <option value="">Selecionar...</option>
+                    <div class="monitor-selector-inline">
+                        <select class="monitor-select-compact daily-monitor-select" data-id="${escapeHtml(item.id)}" data-date="${escapeHtml(dateRef)}">
+                            <option value="">Monitora...</option>
                             ${monitorOptions}
                         </select>
-                        <button type="button" data-action="absence" data-id="${escapeHtml(item.id)}" data-date="${escapeHtml(dateRef)}" data-patient="${escapeHtml(item.paciente)}" class="absence-toggle-btn ${isCancelled ? 'active' : ''}">
-                            <i class="ph ph-x-circle"></i> Não irá
+                        <button type="button" data-action="absence" data-id="${escapeHtml(item.id)}" data-date="${escapeHtml(dateRef)}" data-patient="${escapeHtml(item.paciente)}" class="absence-toggle-btn-compact ${isCancelled ? 'active' : ''}">
+                            <i class="ph ph-ban"></i> ${isCancelled ? 'Cancelado' : 'Cancelar'}
                         </button>
                     </div>
-                    <div class="stepper-grid">
-                        ${stepperHtml}
+                </div>
+
+                <div class="progress-tracker-container">
+                    <div class="tracker-track-bg">
+                        <div class="tracker-track-fill" style="width: ${fillPercent}%;"></div>
+                    </div>
+                    <div class="tracker-nodes-row">
+                        ${trackerNodesHtml}
                     </div>
                 </div>
             `;
@@ -1026,8 +1043,8 @@ document.addEventListener('DOMContentLoaded', () => {
         MONITORAS.forEach((m, idx) => {
             const row = document.createElement('div');
             row.className = 'agenda-card flex justify-between items-center';
-            row.style.cssText = 'padding: 14px 18px; border-left: 4px solid var(--tea-violet);';
-            row.innerHTML = `<span class="font-bold text-base">${escapeHtml(m)}</span><button type="button" class="icon-btn-card delete" onclick="removeMonitor(${idx})"><i class="ph ph-trash"></i></button>`;
+            row.style.cssText = 'padding: 10px 14px; border-left: 3px solid var(--tea-violet);';
+            row.innerHTML = `<span class="font-bold text-sm">${escapeHtml(m)}</span><button type="button" class="icon-btn-card delete" onclick="removeMonitor(${idx})"><i class="ph ph-trash"></i></button>`;
             container.appendChild(row);
         });
     }
@@ -1104,7 +1121,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (item.status === 'CANCELADO') {
                     item.status = ''; item.ausenciaMotivo = ''; item.ausenciaTimestamp = ''; item.ausenciaGps = '';
                 } else {
-                    const reason = prompt(`Motivo da ausência de ${button.dataset.patient}:`);
+                    const reason = prompt(`Motivo do cancelamento de ${button.dataset.patient}:`);
                     if (!reason || !reason.trim()) return;
                     item.status = 'CANCELADO';
                     item.ausenciaMotivo = reason.trim();
