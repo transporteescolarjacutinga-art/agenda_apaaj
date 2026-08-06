@@ -791,6 +791,26 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnNextDay) btnNextDay.addEventListener('click', () => shiftDate(1));
     if (DOM.fData) DOM.fData.addEventListener('change', () => { updateDisplayDateLabel(); render(); });
 
+    // Suporte para abrir o picker de calendário no Desktop ao clicar no filtro de data
+    const dateDisplayBox = document.querySelector('.date-display-box');
+    const triggerDatePicker = (inputEl) => {
+        if (inputEl && typeof inputEl.showPicker === 'function') {
+            try {
+                inputEl.showPicker();
+            } catch (err) {
+                console.warn('Erro ao abrir o seletor de data:', err);
+            }
+        }
+    };
+
+    if (dateDisplayBox && DOM.fData) {
+        dateDisplayBox.addEventListener('click', () => triggerDatePicker(DOM.fData));
+    }
+
+    document.querySelectorAll('input[type="date"]').forEach(input => {
+        input.addEventListener('click', () => triggerDatePicker(input));
+    });
+
     // Listeners de Filtro
     function handleFilterChange() {
         updateClearFiltersButton();
