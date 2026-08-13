@@ -436,9 +436,10 @@ button:disabled {
     display: flex;
     align-items: center;
     gap: 6px;
+    flex-wrap: wrap;
 }
 
-.badge-time, .badge-turno {
+.badge-time, .badge-turno, .badge-dia {
     height: 24px;
     padding: 0 8px;
     border-radius: var(--radius-full);
@@ -449,6 +450,13 @@ button:disabled {
     font-size: 0.72rem;
     line-height: 1;
     white-space: nowrap;
+}
+
+.badge-dia {
+    background: var(--tea-violet-light);
+    color: var(--tea-violet);
+    border: 1px solid var(--tea-violet-border);
+    gap: 4px;
 }
 
 .badge-time {

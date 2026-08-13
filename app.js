@@ -1,5 +1,9 @@
+/**
+ * Lumina Scheduler Pro - Sistema de Gestão de Transporte Especial (TEA)
+ * Módulo de CRUD Resiliente, Offline-First, Projeção Recorrente e Auditoria GPS
+ */
 document.addEventListener('DOMContentLoaded', () => {
-    // ---- DOM Elements ----
+    // ---- 1. Mapeamento de Elementos DOM ----
     const DOM = {
         agendaList: document.getElementById('agendaList'),
         btnNewMobile: document.getElementById('navBtnNew'),
@@ -25,7 +29,6 @@ document.addEventListener('DOMContentLoaded', () => {
         btnConfirmOk: document.getElementById('btnConfirmOk'),
         btnConfirmCancel: document.getElementById('btnConfirmCancel'),
 
-        // Modal de Auditoria GPS Timeline
         gpsModalOverlay: document.getElementById('gpsModalOverlay'),
         gpsModal: document.getElementById('gpsModal'),
         btnCloseGpsModal: document.getElementById('btnCloseGpsModal'),
@@ -49,7 +52,6 @@ document.addEventListener('DOMContentLoaded', () => {
         dashMorningCard: document.getElementById('dashMorningCard'),
         dashAfternoonCard: document.getElementById('dashAfternoonCard'),
 
-        // Tab Navigation
         navAgenda: document.getElementById('navBtnAgenda'),
         navMonitors: document.getElementById('navBtnMonitors'),
         navMetrics: document.getElementById('navBtnMetrics'),
@@ -61,6 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tabReports: document.getElementById('tabReports')
     };
 
+    // ---- 2. Auxiliares & Utilities ----
     function showToast(message, type = 'success') {
         const container = document.getElementById('toastContainer');
         if (!container) return;
@@ -71,11 +74,9 @@ document.addEventListener('DOMContentLoaded', () => {
         toast.style.cssText = `position: fixed; top: 16px; right: 16px; z-index: 200; padding: 10px 14px; border-left: 4px solid ${colorClass}; box-shadow: var(--shadow-sheet); animation: slideIn 0.3s ease;`;
         toast.innerHTML = `<div class="flex items-center gap-2 font-bold" style="font-size:0.85rem;"><i class="ph ${icon} text-lg" style="color:${colorClass};"></i><span>${message}</span></div>`;
         container.appendChild(toast);
-
         setTimeout(() => toast.remove(), 3200);
     }
 
-    // ---- Sistema de Captura de Geolocalização (GPS) ----
     function captureGeolocation() {
         return new Promise((resolve) => {
             if (!navigator.geolocation) {
@@ -89,7 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     resolve(`${lat},${lng}`);
                 },
                 (err) => {
-                    console.warn('Geolocation capture failed/denied:', err);
+                    console.warn('Captura de geolocalização falhou/negada:', err);
                     resolve('');
                 },
                 { enableHighAccuracy: true, timeout: 9000, maximumAge: 0 }
@@ -103,7 +104,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
         return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
     }
-    
+
     function isAdmin() {
         return sessionStorage.getItem('isAdmin') === 'true';
     }
@@ -117,7 +118,8 @@ document.addEventListener('DOMContentLoaded', () => {
             .replace(/Ã§/g, 'ç').replace(/Ã£/g, 'ã').replace(/Ã¡/g, 'á')
             .replace(/Ã©/g, 'é').replace(/Ãª/g, 'ê').replace(/Ã­/g, 'í')
             .replace(/Ã³/g, 'ó').replace(/Ã´/g, 'ô').replace(/Ãº/g, 'ú')
-            .replace(/Â/g, '');
+            .replace(/Â/g, '')
+            .trim();
     };
 
     const escapeHtml = (value) => fixTextEncoding(value).replace(/[&<>"']/g, (char) => ({
@@ -132,6 +134,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!dateValue) return '';
         const [y, m, d] = dateValue.split('-');
         const parsedDate = new Date(y, m - 1, d);
+        if (isNaN(parsedDate.getTime())) return '';
         const weekdays = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
         return weekdays[parsedDate.getDay()] || '';
     };
@@ -143,6 +146,43 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isoMatch) return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
         return fixed;
     };
+
+    const WEEKDAY_INDEX = {
+        'domingo': 0,
+        'segunda-feira': 1, 'segunda': 1,
+        'terça-feira': 2, 'terca-feira': 2, 'terça': 2, 'terca': 2,
+        'quarta-feira': 3, 'quarta': 3,
+        'quinta-feira': 4, 'quinta': 4,
+        'sexta-feira': 5, 'sexta': 5,
+        'sábado': 6, 'sabado': 6
+    };
+
+    function getItemDayLabel(item) {
+        let dia = fixTextEncoding(item.dia);
+        if (!dia && item.data) dia = getWeekdayFromISO(item.data);
+        return dia || '';
+    }
+
+    function getItemDayBadgeText(item) {
+        const dia = getItemDayLabel(item);
+        if (item.data && formatDateBR(item.data)) {
+            const dateFormatted = formatDateBR(item.data);
+            return dia ? `${dia} (${dateFormatted})` : dateFormatted;
+        }
+        return dia || '';
+    }
+
+    function getItemWeekdayOrder(item) {
+        if (item.data) {
+            const [y, m, d] = item.data.split('-');
+            if (y && m && d) {
+                const dt = new Date(y, m - 1, d);
+                if (!isNaN(dt.getTime())) return dt.getDay();
+            }
+        }
+        const diaRaw = normalizeFilterText(getItemDayLabel(item));
+        return WEEKDAY_INDEX[diaRaw] ?? 99;
+    }
 
     const ADMIN_PASSCODE_HASH = '158a323a7ba44870f23d96f1516dd70aa48e9a72db4ebb026b0a89e212a208ab';
     const ADMIN_PASSCODE_FALLBACK_HASH = '143b42d57035cd';
@@ -201,7 +241,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (raw.includes('manha') || raw.includes('mana') || raw.includes('manh')) return 'Manhã';
         const hourMatch = String(inicioValue || '').match(/\d{1,2}/);
         const hour = hourMatch ? parseInt(hourMatch[0], 10) : NaN;
-        if (!Number.isNaN(hour)) return hour >= 13 ? 'Tarde' : 'Manhã';
+        if (!Number.isNaN(hour)) return hour >= 12 ? 'Tarde' : 'Manhã';
         return '';
     }
 
@@ -225,10 +265,10 @@ document.addEventListener('DOMContentLoaded', () => {
         return PROGRESS_STEPS.find(step => step.code === code);
     }
 
-    // ---- Init Filters & Date ----
+    // Inicialização da Data Padrão do Filtro
     const tzOffset = new Date().getTimezoneOffset() * 60000;
     const localISOTime = (new Date(Date.now() - tzOffset)).toISOString().slice(0, 10);
-    if(DOM.fData) DOM.fData.value = localISOTime;
+    if (DOM.fData) DOM.fData.value = localISOTime;
 
     let lastUserInteractionAt = 0;
     function markUserInteraction() { lastUserInteractionAt = Date.now(); }
@@ -245,14 +285,40 @@ document.addEventListener('DOMContentLoaded', () => {
         document.addEventListener(evt, markUserInteraction, { capture: true, passive: true });
     });
 
-    // ---- Data Management (Supabase REST API) ----
+    // ---- 3. Gerenciamento de Dados Offline-First com Fila Resiliente ----
     const SUPABASE_URL = "https://ymgmlvrbydmxfnkeopra.supabase.co";
     const SUPABASE_KEY = "sb_publishable_iKPcSA5NVhhl--V35OP2cQ_ax2zvrob";
     const SUPABASE_TABLES = { appointments: 'appointments', monitors: 'monitors' };
-    let appointments = [];
+    
+    // Carregar cache local de agendamentos
+    let appointments = parseJsonSafe(localStorage.getItem('lumina_agenda_cache'), []);
+    if (!Array.isArray(appointments)) appointments = [];
+
+    // Fila de Sincronização Pendente (Garante Zero Perda de Dados)
+    let pendingSyncQueue = parseJsonSafe(localStorage.getItem('lumina_pending_sync'), []);
+    if (!Array.isArray(pendingSyncQueue)) pendingSyncQueue = [];
+
+    let deletedIdsQueue = parseJsonSafe(localStorage.getItem('lumina_deleted_ids'), []);
+    if (!Array.isArray(deletedIdsQueue)) deletedIdsQueue = [];
+
     const DEFAULT_MONITORAS = ["Vanessa", "Luciana", "Eliane", "Nenhuma"];
     let MONITORAS = parseJsonSafe(localStorage.getItem('lumina_monitoras'), null);
     if (!Array.isArray(MONITORAS) || MONITORAS.length === 0) MONITORAS = [...DEFAULT_MONITORAS];
+
+    function saveLocalState() {
+        localStorage.setItem('lumina_agenda_cache', JSON.stringify(appointments));
+        localStorage.setItem('lumina_pending_sync', JSON.stringify(pendingSyncQueue));
+        localStorage.setItem('lumina_deleted_ids', JSON.stringify(deletedIdsQueue));
+    }
+
+    function markItemPendingSync(item) {
+        item.isPendingSync = true;
+        item._updatedAt = Date.now();
+        const existingIdx = pendingSyncQueue.findIndex(p => String(p.id) === String(item.id));
+        if (existingIdx >= 0) pendingSyncQueue[existingIdx] = item;
+        else pendingSyncQueue.push(item);
+        saveLocalState();
+    }
 
     const supabaseHeaders = (extra = {}) => ({
         apikey: SUPABASE_KEY,
@@ -287,9 +353,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function toSupabaseAppointment(item) {
+        const cleanId = String(item.id || '').startsWith('proj_') ? String(item.id).replace(/^proj_/, '').replace(/_\d{4}-\d{2}-\d{2}$/, '') : String(item.id || '');
         return {
-            id: String(item.id),
+            id: cleanId,
             data: item.data || null,
+            data_fim: item.dataFim || item.data_fim || null,
             profissional: fixTextEncoding(item.profissional),
             tipo: fixTextEncoding(item.tipo),
             paciente: fixTextEncoding(item.paciente),
@@ -321,6 +389,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return {
             id: item.id || '',
             data: item.data || '',
+            dataFim: item.dataFim || item.data_fim || '',
             profissional: fixTextEncoding(item.profissional),
             tipo: fixTextEncoding(item.tipo),
             paciente: fixTextEncoding(item.paciente),
@@ -348,138 +417,156 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
-    async function supabaseCreateAppointments(records) {
-        if (!records.length) return [];
-        return supabaseRequest(`${SUPABASE_TABLES.appointments}`, {
-            method: 'POST',
-            headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
-            body: JSON.stringify(records.map(toSupabaseAppointment))
-        });
+    async function flushPendingSyncQueue() {
+        if (!navigator.onLine) return;
+        
+        // 1. Processar deleções pendentes
+        if (deletedIdsQueue.length > 0) {
+            const idsToDelete = [...deletedIdsQueue];
+            for (const itemToDelete of idsToDelete) {
+                try {
+                    await supabaseDeleteAppointmentCompletely(itemToDelete);
+                    deletedIdsQueue = deletedIdsQueue.filter(i => i !== itemToDelete && i.id !== itemToDelete.id);
+                    saveLocalState();
+                } catch(e) {}
+            }
+        }
+
+        // 2. Processar cadastros/edições pendentes
+        if (pendingSyncQueue.length > 0) {
+            const itemsToSync = [...pendingSyncQueue];
+            for (const item of itemsToSync) {
+                try {
+                    const payload = toSupabaseAppointment(item);
+                    await supabaseRequest(`${SUPABASE_TABLES.appointments}?on_conflict=id`, {
+                        method: 'POST',
+                        headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    item.isPendingSync = false;
+                    pendingSyncQueue = pendingSyncQueue.filter(p => String(p.id) !== String(item.id));
+                    saveLocalState();
+                } catch(e) {
+                    console.warn(`Tentativa de sincronização pendente para ${item.paciente} aguardando próxima rodada:`, e);
+                }
+            }
+        }
     }
 
     async function supabaseUpdateAppointment(record) {
-        return supabaseRequest(`${SUPABASE_TABLES.appointments}?on_conflict=id`, {
-            method: 'POST',
-            headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-            body: JSON.stringify(toSupabaseAppointment(record))
-        });
+        markItemPendingSync(record);
+        await flushPendingSyncQueue();
     }
 
-    async function supabaseDeleteRecurringAppointments(paciente, dia, inicio) {
-        const query = `paciente=eq.${encodeURIComponent(paciente)}&dia=eq.${encodeURIComponent(dia)}&inicio=eq.${encodeURIComponent(inicio)}`;
-        return supabaseRequest(`${SUPABASE_TABLES.appointments}?${query}`, {
-            method: 'DELETE', headers: { Prefer: 'return=minimal' }
-        });
+    async function supabaseCreateAppointments(records) {
+        if (!records || !records.length) return [];
+        records.forEach(markItemPendingSync);
+        await flushPendingSyncQueue();
     }
 
-    // ---- MOTOR DE PROJEÇÃO RECORRENTE PERPÉTUA (TEA SCHEDULER ENGINE) ----
-    function getAppointmentsForDate(dateRef) {
-        if (!dateRef) return appointments;
+    async function supabaseDeleteAppointmentCompletely(item) {
+        if (!item) return;
+        const rawId = String(item.id || '');
+        const baseId = item.baseId || (rawId.startsWith('proj_') ? rawId.replace(/^proj_/, '').replace(/_\d{4}-\d{2}-\d{2}$/, '') : rawId);
+        const patientClean = (item.paciente || '').trim();
+        const inicioVal = (item.inicio || '').trim();
+        const inicioFormatted = inicioVal.length === 5 ? `${inicioVal}:00` : inicioVal;
 
-        const targetWeekday = getWeekdayFromISO(dateRef);
-        const exactMatches = new Map();
-        const templatesByKey = new Map();
+        const deletePromises = [];
 
-        appointments.forEach(a => {
-            const aWeekday = a.dia || getWeekdayFromISO(a.data);
-            const key = `${normalizeFilterText(a.paciente)}|${normalizeFilterText(aWeekday)}|${a.inicio}|${normalizeFilterText(a.profissional)}`;
+        if (rawId && !rawId.startsWith('proj_')) {
+            deletePromises.push(
+                supabaseRequest(`${SUPABASE_TABLES.appointments}?id=eq.${encodeURIComponent(rawId)}`, {
+                    method: 'DELETE', headers: { Prefer: 'return=minimal' }
+                })
+            );
+        }
 
-            if (a.data === dateRef) exactMatches.set(key, a);
+        if (baseId && baseId !== rawId && !baseId.startsWith('proj_')) {
+            deletePromises.push(
+                supabaseRequest(`${SUPABASE_TABLES.appointments}?id=eq.${encodeURIComponent(baseId)}`, {
+                    method: 'DELETE', headers: { Prefer: 'return=minimal' }
+                })
+            );
+        }
 
-            if (!templatesByKey.has(key)) {
-                templatesByKey.set(key, a);
-            } else {
-                const existing = templatesByKey.get(key);
-                if (a.data && existing.data && a.data < existing.data) {
-                    templatesByKey.set(key, a);
-                }
+        if (patientClean && item.data && inicioVal) {
+            deletePromises.push(
+                supabaseRequest(`${SUPABASE_TABLES.appointments}?paciente=ilike.${encodeURIComponent(patientClean)}&data=eq.${encodeURIComponent(item.data)}&inicio=eq.${encodeURIComponent(inicioVal)}`, {
+                    method: 'DELETE', headers: { Prefer: 'return=minimal' }
+                })
+            );
+            if (inicioFormatted !== inicioVal) {
+                deletePromises.push(
+                    supabaseRequest(`${SUPABASE_TABLES.appointments}?paciente=ilike.${encodeURIComponent(patientClean)}&data=eq.${encodeURIComponent(item.data)}&inicio=eq.${encodeURIComponent(inicioFormatted)}`, {
+                        method: 'DELETE', headers: { Prefer: 'return=minimal' }
+                    })
+                );
+            }
+        }
+
+        await Promise.allSettled(deletePromises);
+    }
+
+    function mergeAppointments(localList, remoteList) {
+        if (!Array.isArray(remoteList)) return localList || [];
+        if (!Array.isArray(localList) || localList.length === 0) return remoteList;
+
+        const remoteMap = new Map();
+        remoteList.forEach(r => remoteMap.set(String(r.id), r));
+
+        const deletedSet = new Set();
+        deletedIdsQueue.forEach(d => {
+            if (typeof d === 'string') deletedSet.add(d);
+            else if (d && d.id) deletedSet.add(String(d.id));
+        });
+
+        const mergedMap = new Map();
+
+        // 1. Inserir itens remotos (desde que não estejam deletados localmente)
+        remoteList.forEach(remoteItem => {
+            const idStr = String(remoteItem.id);
+            if (!deletedSet.has(idStr)) {
+                mergedMap.set(idStr, remoteItem);
             }
         });
 
-        const result = [];
-        const processedKeys = new Set();
+        // 2. Mesclar itens locais (preservando cadastros recém-criados ou pendentes de sync)
+        localList.forEach(localItem => {
+            const idStr = String(localItem.id);
+            if (deletedSet.has(idStr)) return;
 
-        exactMatches.forEach((record, key) => {
-            result.push(record);
-            processedKeys.add(key);
+            const remoteItem = mergedMap.get(idStr);
+            if (!remoteItem || localItem.isPendingSync || (localItem._updatedAt && localItem._updatedAt > (remoteItem._updatedAt || 0))) {
+                mergedMap.set(idStr, localItem);
+            }
         });
 
-        templatesByKey.forEach((template, key) => {
-            if (processedKeys.has(key)) return;
-
-            const tWeekday = template.dia || getWeekdayFromISO(template.data);
-            if (tWeekday !== targetWeekday) return;
-
-            const startDate = template.data || template.dataInicio;
-            if (startDate && dateRef < startDate) return;
-
-            result.push({
-                ...template,
-                id: template.id.includes(dateRef) ? template.id : `proj_${template.id}_${dateRef}`,
-                data: dateRef,
-                dia: targetWeekday,
-                status: '', monitora: '',
-                gpsBuscadoEscola: '', timestampBuscadoEscola: '',
-                gpsEntregueOng: '', timestampEntregueOng: '',
-                gpsSaidaOng: '', timestampSaidaOng: '',
-                gpsDevolvidoEscola: '', timestampDevolvidoEscola: '',
-                ausenciaMotivo: '', ausenciaTimestamp: '', ausenciaGps: '',
-                isProjected: true, baseId: template.id
-            });
-        });
-
-        return result;
-    }
-
-    function ensureConcreteRecord(item, dateStr) {
-        let concrete = appointments.find(a => String(a.id) === String(item.id) || (a.data === dateStr && normalizeFilterText(a.paciente) === normalizeFilterText(item.paciente) && a.inicio === item.inicio));
-
-        if (!concrete) {
-            concrete = {
-                ...item,
-                id: item.id.includes(dateStr) ? item.id : `${item.baseId || item.id}_${dateStr}`,
-                data: dateStr,
-                isProjected: false
-            };
-            appointments.push(concrete);
-        }
-        return concrete;
+        return Array.from(mergedMap.values());
     }
 
     async function loadData(silent = false) {
-        if (!silent) {
-            const cachedData = localStorage.getItem('lumina_agenda_cache');
-            if (cachedData) {
-                try {
-                    appointments = JSON.parse(cachedData);
-                    updateFilterOptions();
-                    render();
-                } catch(e) {}
-            }
+        if (!silent && appointments.length === 0) {
             DOM.agendaList.innerHTML = '<div class="py-12 flex flex-col items-center justify-center text-tea-blue font-bold gap-3"><i class="ph ph-spinner-gap animate-spin text-4xl"></i><div>Sincronizando agendamentos...</div></div>';
         }
 
         try {
             if (!navigator.onLine) return;
-            const data = await supabaseRequest(`${SUPABASE_TABLES.appointments}?select=*&order=data.asc&order=inicio.asc`, { method: 'GET' });
-            const newData = Array.isArray(data) ? data.map(fromSupabaseAppointment) : [];
+            const data = await supabaseRequest(`${SUPABASE_TABLES.appointments}?select=*&order=data.asc&order=inicio.asc&limit=10000`, {
+                method: 'GET',
+                headers: { 'Range-Unit': 'items', 'Range': '0-99999' }
+            });
+            let newData = Array.isArray(data) ? data.map(fromSupabaseAppointment) : [];
 
-            if (silent) {
-                if (isBackgroundSyncPaused()) return;
-                if (JSON.stringify(appointments) !== JSON.stringify(newData)) {
-                    appointments = newData;
-                    localStorage.setItem('lumina_agenda_cache', JSON.stringify(newData));
-                    updateFilterOptions();
-                    render();
-                }
-            } else {
-                appointments = newData;
-                localStorage.setItem('lumina_agenda_cache', JSON.stringify(newData));
-                updateFilterOptions();
-                render();
-            }
+            // Mesclar para NUNCA apagar novos cadastros locais!
+            appointments = mergeAppointments(appointments, newData);
+            saveLocalState();
+            updateFilterOptions();
+            render();
+            await flushPendingSyncQueue();
         } catch(e) {
-            if (!silent) console.error('Supabase error:', e);
+            if (!silent) console.error('Erro de sincronização Supabase:', e);
         }
     }
 
@@ -498,7 +585,145 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch(e) {}
     }
 
-    // ---- Control de Abas (Mobile Bottom Nav) ----
+    // ---- 4. Motor de Projeção Recorrente Perpétua (TEA Scheduler Engine) ----
+    function getAppointmentsForDate(dateRef) {
+        if (!dateRef) return appointments;
+
+        const targetWeekday = getWeekdayFromISO(dateRef);
+        const exactMatches = new Map();
+        const templatesByKey = new Map();
+
+        appointments.forEach(a => {
+            const aWeekday = a.dia || getWeekdayFromISO(a.data);
+            if (!aWeekday) return;
+
+            const timeKey = (a.inicio || '').trim();
+            const key = `${normalizeFilterText(a.paciente)}|${normalizeFilterText(aWeekday)}|${timeKey}`;
+
+            if (a.data === dateRef && !a.isProjected) {
+                exactMatches.set(key, a);
+            }
+
+            const isBaseTemplate = !a.baseId || String(a.id) === String(a.baseId);
+            if (normalizeFilterText(aWeekday) === normalizeFilterText(targetWeekday) && !a.isProjected && isBaseTemplate) {
+                const startDate = a.data || a.dataInicio;
+                const endDate = a.dataFim || a.data_fim;
+
+                const isValidStart = !startDate || dateRef >= startDate;
+                const isValidEnd = !endDate || dateRef <= endDate;
+
+                if (isValidStart && isValidEnd) {
+                    if (!templatesByKey.has(key)) {
+                        templatesByKey.set(key, a);
+                    } else {
+                        const existing = templatesByKey.get(key);
+                        const existingStart = existing.data || existing.dataInicio || '1970-01-01';
+                        const currentStart = startDate || '1970-01-01';
+                        if (currentStart >= existingStart) {
+                            templatesByKey.set(key, a);
+                        }
+                    }
+                }
+            }
+        });
+
+        const result = [];
+        const processedKeys = new Set();
+
+        exactMatches.forEach((record, key) => {
+            result.push(record);
+            processedKeys.add(key);
+        });
+
+        templatesByKey.forEach((template, key) => {
+            if (processedKeys.has(key)) return;
+
+            const tWeekday = template.dia || getWeekdayFromISO(template.data);
+            if (normalizeFilterText(tWeekday) !== normalizeFilterText(targetWeekday)) return;
+
+            const startDate = template.data || template.dataInicio;
+            if (startDate && dateRef < startDate) return;
+
+            const endDate = template.dataFim || template.data_fim;
+            if (endDate && dateRef > endDate) return;
+
+            const hasExactOverride = Array.from(exactMatches.values()).some(e => {
+                if (e.baseId && String(e.baseId) === String(template.id)) return true;
+                if (normalizeFilterText(e.paciente) === normalizeFilterText(template.paciente) && normalizeFilterText(e.escola) === normalizeFilterText(template.escola)) return true;
+                return false;
+            });
+            if (hasExactOverride) return;
+
+            result.push({
+                ...template,
+                id: template.id.includes(dateRef) ? template.id : `proj_${template.id}_${dateRef}`,
+                data: dateRef,
+                dia: targetWeekday,
+                status: '', monitora: '',
+                gpsBuscadoEscola: '', timestampBuscadoEscola: '',
+                gpsEntregueOng: '', timestampEntregueOng: '',
+                gpsSaidaOng: '', timestampSaidaOng: '',
+                gpsDevolvidoEscola: '', timestampDevolvidoEscola: '',
+                ausenciaMotivo: '', ausenciaTimestamp: '', ausenciaGps: '',
+                isProjected: true, baseId: template.id
+            });
+        });
+
+        // Deduplicação estrita para garantir 1 único cartão por paciente/atendimento no dia
+        const deduplicatedMap = new Map();
+        result.forEach(item => {
+            const groupKey = `${normalizeFilterText(item.paciente)}|${normalizeFilterText(item.profissional)}|${normalizeFilterText(item.escola)}`;
+            if (!deduplicatedMap.has(groupKey)) {
+                deduplicatedMap.set(groupKey, item);
+            } else {
+                const existing = deduplicatedMap.get(groupKey);
+                const existingScore = (existing.isProjected ? 0 : 100) + (existing._updatedAt || 0);
+                const currentScore = (item.isProjected ? 0 : 100) + (item._updatedAt || 0);
+                if (currentScore >= existingScore) {
+                    deduplicatedMap.set(groupKey, item);
+                }
+            }
+        });
+
+        return Array.from(deduplicatedMap.values());
+    }
+
+    function ensureConcreteRecord(item, dateStr) {
+        if (!item) return null;
+        const rawId = String(item.id || '');
+        const baseId = item.baseId || (rawId.startsWith('proj_') ? rawId.replace(/^proj_/, '').replace(/_\d{4}-\d{2}-\d{2}$/, '') : rawId);
+        const itemTime = (item.inicio || '').trim();
+        const targetId = (item.data === dateStr && !rawId.startsWith('proj_')) ? rawId : `${baseId}_${dateStr}`;
+
+        let concrete = appointments.find(a => {
+            if (a.isProjected) return false;
+            if (!a.baseId && String(a.id) === String(baseId) && a.data !== dateStr) return false;
+            const aId = String(a.id);
+            if (aId === targetId) return true;
+            if (a.data === dateStr) {
+                if (a.baseId === baseId) return true;
+                if (normalizeFilterText(a.paciente) === normalizeFilterText(item.paciente) && (a.inicio || '').trim() === itemTime) return true;
+            }
+            return false;
+        });
+
+        if (!concrete) {
+            concrete = {
+                ...item,
+                id: targetId,
+                baseId: baseId,
+                data: dateStr,
+                isProjected: false
+            };
+            appointments.push(concrete);
+        } else {
+            concrete.isProjected = false;
+            if (!concrete.baseId) concrete.baseId = baseId;
+        }
+        return concrete;
+    }
+
+    // ---- 5. Controle de Abas (Mobile Bottom Nav) ----
     function switchTab(tabName) {
         const tabs = {
             agenda: { btn: DOM.navAgenda, tab: DOM.tabAgenda },
@@ -523,7 +748,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (DOM.navMetrics) DOM.navMetrics.addEventListener('click', () => switchTab('metrics'));
     if (DOM.navReports) DOM.navReports.addEventListener('click', () => switchTab('reports'));
 
-    // ---- Drawer / Bottom Sheet Form ----
+    // ---- 6. Drawer / Form Sheet ----
     function openDrawer(mode = 'create', id = null) {
         if (!requireAdmin(mode === 'edit' ? 'editar agendamentos' : 'criar agendamentos')) return;
 
@@ -538,8 +763,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const { dateRef } = getDateFilterInfo();
             const currentList = getAppointmentsForDate(dateRef);
             const item = currentList.find(a => String(a.id) === String(id));
-            if(item) {
+            if (item) {
                 if (DOM.editScopeGroup) DOM.editScopeGroup.classList.remove('hidden');
+                if (document.getElementById('editScope')) document.getElementById('editScope').value = 'forward';
                 document.getElementById('formId').value = item.id;
                 document.getElementById('formProfissional').value = item.profissional || '';
                 document.getElementById('formTipo').value = item.tipo || '';
@@ -567,10 +793,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (DOM.btnCloseDrawer) DOM.btnCloseDrawer.addEventListener('click', closeDrawer);
     if (DOM.drawerOverlay) DOM.drawerOverlay.addEventListener('click', closeDrawer);
 
-    // ---- Confirmation Modal ----
+    // ---- 7. Modais de Confirmação & Auditoria GPS ----
     let currentConfirmationAction = null;
 
-    function showConfirmationModal({ title, message, iconClass, colorStyle, onConfirm }) {
+    function showConfirmationModal({ title, message, iconClass, onConfirm }) {
         const titleEl = document.getElementById('confirmModalTitle');
         const messageEl = document.getElementById('confirmModalMessage');
         const iconContainer = document.getElementById('confirmModalIcon');
@@ -596,7 +822,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     DOM.btnConfirmCancel.addEventListener('click', closeConfirmationModal);
 
-    // ---- Modal de Auditoria GPS Timeline ----
     function openGpsAuditModal(item, dateRef) {
         if (!DOM.gpsModal) return;
         DOM.gpsModalAvatar.textContent = getInitials(item.paciente);
@@ -628,7 +853,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         DOM.gpsModalBody.innerHTML = '';
-
         const trackGroup = document.createElement('div');
         trackGroup.className = 'timeline-track-group';
 
@@ -708,7 +932,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (DOM.btnDismissGpsModal) DOM.btnDismissGpsModal.addEventListener('click', closeGpsModal);
     if (DOM.gpsModalOverlay) DOM.gpsModalOverlay.addEventListener('click', closeGpsModal);
 
-    // ---- Form Submission ----
+    // ---- 8. Submissão do Formulário (CREATE & UPDATE - Zero Perda) ----
     DOM.form.addEventListener('submit', async (e) => {
         e.preventDefault();
         if (!isAdmin()) { showToast('Acesso negado.', 'error'); return; }
@@ -726,39 +950,167 @@ document.addEventListener('DOMContentLoaded', () => {
         const transpVal = document.getElementById('formTransporte') ? document.getElementById('formTransporte').value : 'Ambos';
         const obsVal = document.getElementById('formObs').value;
         const horaInicio = parseInt(fInicio.split(':')[0], 10);
-        const turnoCalculado = horaInicio >= 13 ? 'Tarde' : 'Manhã';
+        const turnoCalculado = horaInicio >= 12 ? 'Tarde' : 'Manhã';
 
         if (id) {
             const { dateRef } = getDateFilterInfo();
             const currentList = getAppointmentsForDate(dateRef);
             const existing = currentList.find(a => String(a.id) === String(id));
             if (existing) {
-                const concrete = ensureConcreteRecord(existing, dateRef);
-                concrete.profissional = pVal; concrete.tipo = tVal; concrete.paciente = pacVal;
-                concrete.turno = turnoCalculado; concrete.inicio = fInicio; concrete.termino = fTermino;
-                concrete.escola = escVal; concrete.telefone = telVal; concrete.transporte = transpVal; concrete.obs = obsVal;
+                const scope = document.getElementById('editScope')?.value || 'patient';
+                const rawId = String(existing.id);
+                const baseId = existing.baseId || (rawId.startsWith('proj_') ? rawId.replace(/^proj_/, '').replace(/_\d{4}-\d{2}-\d{2}$/, '') : rawId);
 
-                localStorage.setItem('lumina_agenda_cache', JSON.stringify(appointments));
-                updateFilterOptions(); render(); closeDrawer();
-                await supabaseUpdateAppointment(concrete);
-                showToast('Agendamento atualizado!');
+                if (scope === 'day') {
+                    let target = existing.isProjected ? ensureConcreteRecord(existing, dateRef || dataInicioVal) : existing;
+                    target.baseId = baseId;
+                    target.profissional = pVal;
+                    target.tipo = tVal;
+                    target.paciente = pacVal;
+                    target.turno = turnoCalculado;
+                    target.inicio = fInicio;
+                    target.termino = fTermino;
+                    target.escola = escVal;
+                    target.telefone = telVal;
+                    target.transporte = transpVal;
+                    target.obs = obsVal;
+                    target.isProjected = false;
+
+                    saveLocalState();
+                    updateFilterOptions(); render(); closeDrawer();
+                    await supabaseUpdateAppointment(target);
+                    showToast('Agendamento deste dia atualizado!');
+                } else if (scope === 'forward') {
+                    const effectiveDate = dataInicioVal || dateRef || localISOTime;
+                    
+                    let baseTemplate = appointments.find(a => String(a.id) === String(baseId));
+                    if (baseTemplate && baseTemplate.data && baseTemplate.data < effectiveDate) {
+                        const prevDate = new Date(effectiveDate);
+                        prevDate.setDate(prevDate.getDate() - 1);
+                        baseTemplate.dataFim = prevDate.toISOString().split('T')[0];
+                        await supabaseUpdateAppointment(baseTemplate);
+                    }
+
+                    const newSeriesRecord = {
+                        id: `${Date.now()}_rec_${Math.random().toString(36).substr(2, 5)}`,
+                        data: effectiveDate,
+                        dataFim: '',
+                        profissional: pVal,
+                        tipo: tVal,
+                        paciente: pacVal,
+                        dia: getWeekdayFromISO(effectiveDate),
+                        turno: turnoCalculado,
+                        inicio: fInicio,
+                        termino: fTermino,
+                        escola: escVal,
+                        telefone: telVal,
+                        transporte: transpVal,
+                        obs: obsVal,
+                        status: '',
+                        monitora: '',
+                        isProjected: false
+                    };
+                    appointments.push(newSeriesRecord);
+
+                    saveLocalState();
+                    updateFilterOptions(); render(); closeDrawer();
+                    await supabaseCreateAppointments([newSeriesRecord]);
+                    showToast('Série atualizada a partir desta data!');
+                } else {
+                    let target = appointments.find(a => String(a.id) === String(baseId) || String(a.id) === String(rawId));
+                    if (!target) {
+                        target = existing;
+                        if (!appointments.includes(target)) appointments.push(target);
+                    }
+                    target.id = baseId;
+                    target.profissional = pVal;
+                    target.tipo = tVal;
+                    target.paciente = pacVal;
+                    target.turno = turnoCalculado;
+                    target.inicio = fInicio;
+                    target.termino = fTermino;
+                    target.escola = escVal;
+                    target.telefone = telVal;
+                    target.transporte = transpVal;
+                    target.obs = obsVal;
+                    target.isProjected = false;
+                    target.dataFim = '';
+                    if (dataInicioVal) {
+                        target.data = dataInicioVal;
+                        target.dia = getWeekdayFromISO(dataInicioVal) || target.dia;
+                    }
+
+                    const targetPatientNorm = normalizeFilterText(pacVal);
+                    const targetDiaNorm = normalizeFilterText(target.dia || getWeekdayFromISO(dataInicioVal));
+                    const effectiveStartDate = dataInicioVal || dateRef || '1970-01-01';
+
+                    const recordsToUpdate = [target];
+
+                    appointments.forEach(a => {
+                        const aPatientNorm = normalizeFilterText(a.paciente);
+                        const aDiaNorm = normalizeFilterText(a.dia || getWeekdayFromISO(a.data));
+
+                        const isSameSeries = (a.baseId && a.baseId === baseId) ||
+                            (aPatientNorm === targetPatientNorm && aDiaNorm === targetDiaNorm && (!a.data || a.data >= effectiveStartDate));
+
+                        if (isSameSeries && a !== target) {
+                            a.profissional = pVal;
+                            a.tipo = tVal;
+                            a.paciente = pacVal;
+                            a.escola = escVal;
+                            a.telefone = telVal;
+                            a.transporte = transpVal;
+                            a.inicio = fInicio;
+                            a.termino = fTermino;
+                            a.turno = turnoCalculado;
+                            a.obs = obsVal;
+                            recordsToUpdate.push(a);
+                        }
+                    });
+
+                    saveLocalState();
+                    updateFilterOptions(); render(); closeDrawer();
+                    await supabaseCreateAppointments(recordsToUpdate);
+                    showToast('Série de agendamentos atualizada em todos os dias!');
+                }
             }
         } else {
+            // CRIAR NOVO AGENDAMENTO RECORRENTE (SALVAMENTO LOCAL PRIMÁRIO)
             const newRecord = {
                 id: `${Date.now()}_rec_${Math.random().toString(36).substr(2, 5)}`,
-                data: dataInicioVal, profissional: pVal, tipo: tVal, paciente: pacVal,
-                dia: getWeekdayFromISO(dataInicioVal), turno: turnoCalculado, inicio: fInicio, termino: fTermino,
-                escola: escVal, telefone: telVal, transporte: transpVal, obs: obsVal, status: '', monitora: ''
+                data: dataInicioVal,
+                dataFim: '',
+                profissional: pVal,
+                tipo: tVal,
+                paciente: pacVal,
+                dia: getWeekdayFromISO(dataInicioVal),
+                turno: turnoCalculado,
+                inicio: fInicio,
+                termino: fTermino,
+                escola: escVal,
+                telefone: telVal,
+                transporte: transpVal,
+                obs: obsVal,
+                status: '',
+                monitora: '',
+                isProjected: false
             };
+
             appointments.push(newRecord);
-            localStorage.setItem('lumina_agenda_cache', JSON.stringify(appointments));
-            updateFilterOptions(); render(); closeDrawer();
+            markItemPendingSync(newRecord);
+
+            if (DOM.fData && dataInicioVal) DOM.fData.value = dataInicioVal;
+            switchTab('agenda');
+            updateDisplayDateLabel();
+            updateFilterOptions();
+            render();
+            closeDrawer();
             showToast('Série recorrente cadastrada!');
             await supabaseCreateAppointments([newRecord]);
         }
     });
 
-    // ---- Date Navigation & Filters ----
+    // ---- 9. Navegação por Datas & Filtros ----
     function getDateFilterInfo() {
         const dateRef = DOM.fData ? DOM.fData.value : localISOTime;
         return { dateRef, targetWeekday: getWeekdayFromISO(dateRef) };
@@ -766,17 +1118,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateDisplayDateLabel() {
         if (!DOM.displayDateLabel || !DOM.fData) return;
+        if (!DOM.fData.value) {
+            DOM.displayDateLabel.textContent = 'Todas as Datas';
+            return;
+        }
         const [y, m, d] = DOM.fData.value.split('-');
+        if (!y || !m || !d) {
+            DOM.displayDateLabel.textContent = 'Todas as Datas';
+            return;
+        }
         const dateObj = new Date(y, m - 1, d);
+        if (isNaN(dateObj.getTime())) {
+            DOM.displayDateLabel.textContent = 'Todas as Datas';
+            return;
+        }
         const weekday = getWeekdayFromISO(DOM.fData.value);
         const formattedDate = `${String(dateObj.getDate()).padStart(2, '0')}/${String(dateObj.getMonth() + 1).padStart(2, '0')}/${dateObj.getFullYear()}`;
-        DOM.displayDateLabel.textContent = `${weekday}, ${formattedDate}`;
+        DOM.displayDateLabel.textContent = weekday ? `${weekday}, ${formattedDate}` : formattedDate;
     }
 
     function shiftDate(days) {
-        if (!DOM.fData.value) return;
+        if (!DOM.fData) return;
+        if (!DOM.fData.value) DOM.fData.value = localISOTime;
         const [y, m, d] = DOM.fData.value.split('-');
         const date = new Date(y, m - 1, d);
+        if (isNaN(date.getTime())) {
+            DOM.fData.value = localISOTime;
+            updateDisplayDateLabel();
+            render();
+            return;
+        }
         date.setDate(date.getDate() + days);
         if (date.getDay() === 0) date.setDate(date.getDate() + (days > 0 ? 1 : -2));
         if (date.getDay() === 6 && days > 0) date.setDate(date.getDate() + 2);
@@ -791,15 +1162,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnNextDay) btnNextDay.addEventListener('click', () => shiftDate(1));
     if (DOM.fData) DOM.fData.addEventListener('change', () => { updateDisplayDateLabel(); render(); });
 
-    // Suporte para abrir o picker de calendário no Desktop ao clicar no filtro de data
     const dateDisplayBox = document.querySelector('.date-display-box');
     const triggerDatePicker = (inputEl) => {
         if (inputEl && typeof inputEl.showPicker === 'function') {
-            try {
-                inputEl.showPicker();
-            } catch (err) {
-                console.warn('Erro ao abrir o seletor de data:', err);
-            }
+            try { inputEl.showPicker(); } catch (err) {}
         }
     };
 
@@ -811,7 +1177,6 @@ document.addEventListener('DOMContentLoaded', () => {
         input.addEventListener('click', () => triggerDatePicker(input));
     });
 
-    // Listeners de Filtro
     function handleFilterChange() {
         updateClearFiltersButton();
         render();
@@ -821,18 +1186,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (el) el.addEventListener('change', handleFilterChange);
     });
 
-    if (DOM.fPaciente) {
-        DOM.fPaciente.addEventListener('input', handleFilterChange);
-    }
+    if (DOM.fPaciente) DOM.fPaciente.addEventListener('input', handleFilterChange);
 
     function updateClearFiltersButton() {
         if (!DOM.btnClearFilters) return;
         const hasFilter = (DOM.fProf && DOM.fProf.value) || (DOM.fTurno && DOM.fTurno.value) || (DOM.fEscola && DOM.fEscola.value) || (DOM.fPaciente && DOM.fPaciente.value);
-        if (hasFilter) {
-            DOM.btnClearFilters.classList.remove('hidden');
-        } else {
-            DOM.btnClearFilters.classList.add('hidden');
-        }
+        if (hasFilter) DOM.btnClearFilters.classList.remove('hidden');
+        else DOM.btnClearFilters.classList.add('hidden');
     }
 
     if (DOM.btnClearFilters) {
@@ -845,7 +1205,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Filtros rápidos pelos cartões de métrica
     if (DOM.dashTotalCard) {
         DOM.dashTotalCard.addEventListener('click', () => {
             if (DOM.fTurno) DOM.fTurno.value = '';
@@ -887,13 +1246,23 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // ---- Main Render Function (HORIZONTAL TRACKING LINE) ----
+    // ---- 10. Renderização Principal da Agenda ----
     function render() {
         updateDisplayDateLabel();
         updateClearFiltersButton();
         const { dateRef } = getDateFilterInfo();
         let filtered = getFilteredAppointments();
-        filtered.sort((a, b) => (a.inicio || '24:00').localeCompare(b.inicio || '24:00'));
+        if (!dateRef) {
+            filtered.sort((a, b) => {
+                const dayA = getItemWeekdayOrder(a);
+                const dayB = getItemWeekdayOrder(b);
+                if (dayA !== dayB) return dayA - dayB;
+                if (a.data && b.data && a.data !== b.data) return a.data.localeCompare(b.data);
+                return (a.inicio || '24:00').localeCompare(b.inicio || '24:00');
+            });
+        } else {
+            filtered.sort((a, b) => (a.inicio || '24:00').localeCompare(b.inicio || '24:00'));
+        }
 
         const activeFiltered = filtered.filter(a => a.status !== 'CANCELADO');
         if (DOM.dashTotal) DOM.dashTotal.textContent = activeFiltered.length;
@@ -902,7 +1271,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (DOM.dashMorning) DOM.dashMorning.textContent = byTurnoBase.filter(a => normalizeTurnoLabel(a.turno, a.inicio) === 'Manhã').length;
         if (DOM.dashAfternoon) DOM.dashAfternoon.textContent = byTurnoBase.filter(a => normalizeTurnoLabel(a.turno, a.inicio) === 'Tarde').length;
 
-        // ---- Contagem de Instituições Diferentes (Resumo) ----
         const byEscolaBase = getFilteredAppointments({ ignoreEscola: true }).filter(a => a.status !== 'CANCELADO');
         const schoolCounts = new Map();
         byEscolaBase.forEach(item => {
@@ -916,7 +1284,7 @@ document.addEventListener('DOMContentLoaded', () => {
             DOM.dashSchools.innerHTML = '';
             const sortedSchools = Array.from(schoolCounts.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
             if (sortedSchools.length === 0) {
-                DOM.dashSchools.innerHTML = '<div class="text-xs font-semibold text-text-muted p-2">Nenhuma instituição registrada para hoje.</div>';
+                DOM.dashSchools.innerHTML = '<div class="text-xs font-semibold text-text-muted p-2">Nenhuma instituição registrada.</div>';
             } else {
                 sortedSchools.forEach(([school, count]) => {
                     const row = document.createElement('div');
@@ -944,7 +1312,7 @@ document.addEventListener('DOMContentLoaded', () => {
         DOM.agendaList.innerHTML = '';
 
         if (filtered.length === 0) {
-            DOM.agendaList.innerHTML = `<div class="agenda-card text-center text-muted font-bold py-6">Nenhum atendimento para a data selecionada.</div>`;
+            DOM.agendaList.innerHTML = `<div class="agenda-card text-center text-muted font-bold py-6">${dateRef ? 'Nenhum atendimento para a data selecionada.' : 'Nenhum atendimento cadastrado.'}</div>`;
             return;
         }
 
@@ -958,16 +1326,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const turnoClass = turnoLabel === 'Tarde' ? 'turno-tarde' : '';
             const phone = normalizeWhatsappPhone(item.telefone);
             const wppLink = phone ? `https://wa.me/${phone}` : '#';
+            const dayBadgeText = getItemDayBadgeText(item);
+            const effectiveItemDate = item.data || dateRef || localISOTime;
 
             const allowedSteps = getProgressStepsForTransport(item.transporte);
             const monitorOptions = MONITORAS.map(m => `<option value="${escapeHtml(m)}" ${todayMonitor === m ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('');
 
-            // Contagem de auditorias registradas
             let auditCount = 0;
             allowedSteps.forEach(step => { if (statusParts.includes(step.code)) auditCount++; });
             if (isCancelled && (item.ausenciaMotivo || item.ausenciaGps)) auditCount++;
 
-            // Cálculo do preenchimento da linha de progresso
             let maxIndex = -1;
             allowedSteps.forEach((step, idx) => {
                 if (statusParts.includes(step.code)) maxIndex = idx;
@@ -984,7 +1352,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const completed = statusParts.includes(step.code);
                 const timestamp = item[step.timeField] || '';
                 return `
-                    <button type="button" ${isCancelled ? 'disabled' : ''} data-action="progress" data-id="${escapeHtml(item.id)}" data-date="${escapeHtml(dateRef)}" data-step-code="${escapeHtml(step.code)}" data-patient="${escapeHtml(item.paciente)}" class="tracker-node-item ${completed ? 'completed' : ''}">
+                    <button type="button" ${isCancelled ? 'disabled' : ''} data-action="progress" data-id="${escapeHtml(item.id)}" data-date="${escapeHtml(effectiveItemDate)}" data-step-code="${escapeHtml(step.code)}" data-patient="${escapeHtml(item.paciente)}" class="tracker-node-item ${completed ? 'completed' : ''}">
                         <div class="tracker-circle">
                             <i class="ph ${completed ? 'ph-check' : step.icon}"></i>
                         </div>
@@ -1001,13 +1369,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="card-header-left">
                         <h3 class="patient-name-title">${escapeHtml(item.paciente)}</h3>
                         <div class="card-badges-group">
+                            ${dayBadgeText ? `<span class="badge-dia"><i class="ph ph-calendar"></i> ${escapeHtml(dayBadgeText)}</span>` : ''}
                             <span class="badge-time"><i class="ph ph-clock"></i> ${escapeHtml(item.inicio || '--')} às ${escapeHtml(item.termino || '--')}</span>
                             <span class="badge-turno">${escapeHtml(turnoLabel)}</span>
                         </div>
                     </div>
                     <div class="card-actions-admin admin-only">
-                        <button type="button" class="icon-btn-card" data-action="edit" data-id="${escapeHtml(item.id)}"><i class="ph ph-pencil-simple"></i></button>
-                        <button type="button" class="icon-btn-card delete" data-action="delete" data-id="${escapeHtml(item.id)}"><i class="ph ph-trash"></i></button>
+                        <button type="button" class="icon-btn-card" data-action="edit" data-id="${escapeHtml(item.id)}" data-date="${escapeHtml(effectiveItemDate)}"><i class="ph ph-pencil-simple"></i></button>
+                        <button type="button" class="icon-btn-card delete" data-action="delete" data-id="${escapeHtml(item.id)}" data-date="${escapeHtml(effectiveItemDate)}"><i class="ph ph-trash"></i></button>
                     </div>
                 </div>
 
@@ -1026,18 +1395,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="card-actions-strip">
                     <div class="chips-left-group">
                         <span class="badge-transport"><i class="ph ph-bus"></i> ${item.transporte || 'Ida e Volta'}</span>
-                        <button type="button" class="btn-audit-gps" data-action="audit-gps" data-id="${escapeHtml(item.id)}" data-date="${escapeHtml(dateRef)}">
+                        <button type="button" class="btn-audit-gps" data-action="audit-gps" data-id="${escapeHtml(item.id)}" data-date="${escapeHtml(effectiveItemDate)}">
                             <i class="ph ph-map-pin"></i> GPS (${auditCount})
                         </button>
                         ${!isCancelled ? `<a href="${wppLink}" target="_blank" class="whatsapp-float-btn" title="WhatsApp"><i class="ph ph-whatsapp-logo"></i></a>` : ''}
                     </div>
 
                     <div class="monitor-selector-inline">
-                        <select class="monitor-select-compact daily-monitor-select" data-id="${escapeHtml(item.id)}" data-date="${escapeHtml(dateRef)}">
+                        <select class="monitor-select-compact daily-monitor-select" data-id="${escapeHtml(item.id)}" data-date="${escapeHtml(effectiveItemDate)}">
                             <option value="">Monitora...</option>
                             ${monitorOptions}
                         </select>
-                        <button type="button" data-action="absence" data-id="${escapeHtml(item.id)}" data-date="${escapeHtml(dateRef)}" data-patient="${escapeHtml(item.paciente)}" class="absence-toggle-btn-compact ${isCancelled ? 'active' : ''}">
+                        <button type="button" data-action="absence" data-id="${escapeHtml(item.id)}" data-date="${escapeHtml(effectiveItemDate)}" data-patient="${escapeHtml(item.paciente)}" class="absence-toggle-btn-compact ${isCancelled ? 'active' : ''}">
                             <i class="ph ph-ban"></i> ${isCancelled ? 'Cancelado' : 'Cancelar'}
                         </button>
                     </div>
@@ -1094,7 +1463,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // ---- Interaction Listeners ----
+    // ---- 11. Listeners de Interação Interativa ----
     if (DOM.agendaList) {
         DOM.agendaList.addEventListener('click', async (event) => {
             const button = event.target.closest('[data-action]');
@@ -1126,7 +1495,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     item[step.gpsField] = coords;
                 }
                 item.status = parts.join(',');
-                localStorage.setItem('lumina_agenda_cache', JSON.stringify(appointments));
+                saveLocalState();
                 render();
                 await supabaseUpdateAppointment(item);
                 if (parts.includes(button.dataset.stepCode)) {
@@ -1150,24 +1519,49 @@ document.addEventListener('DOMContentLoaded', () => {
                     const coords = await captureGeolocation();
                     item.ausenciaGps = coords;
                 }
-                localStorage.setItem('lumina_agenda_cache', JSON.stringify(appointments));
+                saveLocalState();
                 render();
                 await supabaseUpdateAppointment(item);
             } else if (action === 'edit') {
                 openDrawer('edit', button.dataset.id);
             } else if (action === 'delete') {
-                const currentList = getAppointmentsForDate(DOM.fData?.value);
-                const item = currentList.find(a => String(a.id) === String(button.dataset.id));
+                if (!requireAdmin('excluir agendamentos')) return;
+                const targetDate = button.dataset.date || DOM.fData?.value || localISOTime;
+                const currentList = getAppointmentsForDate(targetDate);
+                const item = currentList.find(a => String(a.id) === String(button.dataset.id)) || appointments.find(a => String(a.id) === String(button.dataset.id));
                 if (!item) return;
+
                 showConfirmationModal({
                     title: 'Excluir Agendamento',
                     message: `Deseja excluir o agendamento de <strong>${escapeHtml(item.paciente)}</strong>?`,
                     iconClass: 'ph-trash',
                     onConfirm: async () => {
-                        appointments = appointments.filter(a => String(a.id) !== String(button.dataset.id) && !(a.paciente === item.paciente && a.inicio === item.inicio));
-                        localStorage.setItem('lumina_agenda_cache', JSON.stringify(appointments));
+                        markUserInteraction();
+                        const targetId = String(button.dataset.id);
+                        const rawId = String(item.id || '');
+                        const baseId = item.baseId || (rawId.startsWith('proj_') ? rawId.replace(/^proj_/, '').replace(/_\d{4}-\d{2}-\d{2}$/, '') : rawId);
+                        const patientNorm = normalizeFilterText(item.paciente);
+
+                        deletedIdsQueue.push(item);
+                        if (rawId) deletedIdsQueue.push(rawId);
+                        if (baseId) deletedIdsQueue.push(baseId);
+
+                        appointments = appointments.filter(a => {
+                            const aId = String(a.id);
+                            const aNorm = normalizeFilterText(a.paciente);
+                            const aBase = String(a.baseId || '');
+
+                            if (aId === targetId || aId === rawId || aId === baseId) return false;
+                            if (aBase && (aBase === baseId || aBase === rawId || aBase === targetId)) return false;
+                            if (patientNorm && aNorm === patientNorm && (!a.data || a.data === targetDate || a.data === item.data)) return false;
+                            return true;
+                        });
+
+                        saveLocalState();
                         render();
-                        await supabaseDeleteRecurringAppointments(item.paciente, item.dia || getWeekdayFromISO(item.data), item.inicio);
+                        showToast('Agendamento excluído com sucesso!');
+                        await supabaseDeleteAppointmentCompletely(item);
+                        await flushPendingSyncQueue();
                     }
                 });
             }
@@ -1181,7 +1575,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (rawItem) {
                     const item = ensureConcreteRecord(rawItem, select.dataset.date);
                     item.monitora = select.value;
-                    localStorage.setItem('lumina_agenda_cache', JSON.stringify(appointments));
+                    saveLocalState();
                     render();
                     supabaseUpdateAppointment(item);
                 }
@@ -1211,7 +1605,7 @@ document.addEventListener('DOMContentLoaded', () => {
         sortAndPopulate(escolas, DOM.fEscola);
     }
 
-    // ---- Admin Passcode ----
+    // ---- 12. Autenticação & Modo Coordenador ----
     const btnAdminLogin = document.getElementById('btnAdminLogin');
     const btnAdminLogout = document.getElementById('btnAdminLogout');
     if (btnAdminLogin) {
@@ -1240,21 +1634,82 @@ document.addEventListener('DOMContentLoaded', () => {
         if (btnAdminLogout) btnAdminLogout.classList.remove('hidden');
     }
 
-    // ---- Relatórios PDF ----
+    // ---- 13. Gerador de Relatórios PDF ----
     if (DOM.btnGenerateReport) {
         DOM.btnGenerateReport.addEventListener('click', () => {
             if (!requireAdmin('gerar relatórios')) return;
             const start = DOM.reportStartDate?.value;
             const end = DOM.reportEndDate?.value;
             if (!start || !end || start > end) { showToast('Informe o período corretamente.', 'error'); return; }
-            const records = appointments.filter(a => a.data >= start && a.data <= end);
+            
+            const startDt = new Date(start + 'T00:00:00');
+            const endDt = new Date(end + 'T00:00:00');
+            
+            const allPeriodRecords = [];
+            const curr = new Date(startDt);
+            
+            while (curr <= endDt) {
+                const dateStr = curr.toISOString().split('T')[0];
+                const dayRecords = getAppointmentsForDate(dateStr);
+                dayRecords.forEach(rec => {
+                    allPeriodRecords.push({ ...rec, reportDate: dateStr });
+                });
+                curr.setDate(curr.getDate() + 1);
+            }
+            
             const reportWin = window.open('', '_blank');
-            reportWin.document.write(`<html><head><title>Relatório Novo Olhar</title></head><body><h1>Relatório de Atendimentos (${formatDateBR(start)} a ${formatDateBR(end)})</h1><p>Total: ${records.length}</p><script>window.print();<\/script></body></html>`);
+            const rowsHtml = allPeriodRecords.map(r => `
+                <tr>
+                    <td style="padding:6px; border:1px solid #ccc;">${formatDateBR(r.reportDate)}</td>
+                    <td style="padding:6px; border:1px solid #ccc;">${escapeHtml(r.paciente)}</td>
+                    <td style="padding:6px; border:1px solid #ccc;">${escapeHtml(r.profissional)} (${escapeHtml(r.tipo)})</td>
+                    <td style="padding:6px; border:1px solid #ccc;">${escapeHtml(r.inicio)} - ${escapeHtml(r.termino)} (${escapeHtml(r.turno)})</td>
+                    <td style="padding:6px; border:1px solid #ccc;">${escapeHtml(r.escola)}</td>
+                    <td style="padding:6px; border:1px solid #ccc;">${escapeHtml(r.monitora || 'Não atribuída')}</td>
+                    <td style="padding:6px; border:1px solid #ccc;">${r.status === 'CANCELADO' ? 'Cancelado' : (r.status ? 'Em Andamento/Concluído' : 'Aguardando')}</td>
+                </tr>
+            `).join('');
+
+            reportWin.document.write(`
+                <html>
+                <head>
+                    <title>Relatório Novo Olhar (TEA)</title>
+                    <style>
+                        body { font-family: sans-serif; padding: 20px; color: #333; }
+                        h1 { color: #1e40af; font-size: 1.4rem; margin-bottom: 4px; }
+                        p { font-size: 0.9rem; color: #666; margin-bottom: 16px; }
+                        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+                        th { background: #f1f5f9; padding: 8px; border: 1px solid #ccc; text-align: left; }
+                    </style>
+                </head>
+                <body>
+                    <h1>Relatório de Atendimentos Transporte Especial TEA</h1>
+                    <p>Período: <strong>${formatDateBR(start)}</strong> a <strong>${formatDateBR(end)}</strong> &bull; Total de Atendimentos no Período: <strong>${allPeriodRecords.length}</strong></p>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Paciente</th>
+                                <th>Profissional / Atendimento</th>
+                                <th>Horário (Turno)</th>
+                                <th>Instituição</th>
+                                <th>Monitora</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rowsHtml.length > 0 ? rowsHtml : '<tr><td colspan="7" style="text-align:center; padding:12px;">Nenhum atendimento encontrado no período.</td></tr>'}
+                        </tbody>
+                    </table>
+                    <script>window.print();<\/script>
+                </body>
+                </html>
+            `);
             reportWin.document.close();
         });
     }
 
-    // ---- Relógio ao Vivo ----
+    // ---- 14. Relógio ao Vivo & Inicialização Resiliente ----
     const liveClockEl = document.getElementById('liveClock');
     function updateClock() {
         if (!liveClockEl) return;
@@ -1263,7 +1718,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     setInterval(updateClock, 1000); updateClock();
 
-    // ---- Init ----
+    // Renderização local instantânea antes da rede
+    updateFilterOptions();
+    render();
+
     loadData(false);
     loadMonitors();
 
