@@ -11,7 +11,7 @@
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#2563eb">
     <link rel="apple-touch-icon" href="logo-ong.png">
-    <link rel="stylesheet" href="style.css?v=30">
+    <link rel="stylesheet" href="style.css?v=31">
 </head>
 <body class="viewer-mode">
 
@@ -30,9 +30,9 @@
                     <i class="ph ph-clock text-tea-blue"></i>
                     <span id="liveClock">--:--</span>
                 </div>
-                <button id="btnImportExcel" class="header-btn admin-only" title="Importar Planilha (XLSX/CSV)"><i class="ph ph-file-arrow-up"></i></button>
-                <button id="btnAdminLogin" class="header-btn" title="Acesso Coordenador"><i class="ph ph-lock-key"></i></button>
-                <button id="btnAdminLogout" class="header-btn hidden" title="Sair do Modo Admin"><i class="ph ph-lock-key-open"></i></button>
+                <button id="btnImportExcel" class="header-btn admin-only" type="button" title="Importar Planilha (XLSX/CSV)"><i class="ph ph-file-arrow-up"></i></button>
+                <button id="btnAdminLogin" class="header-btn" type="button" title="Acesso Coordenador"><i class="ph ph-lock-key"></i></button>
+                <button id="btnAdminLogout" class="header-btn hidden" type="button" title="Sair do Modo Admin"><i class="ph ph-lock-key-open"></i></button>
             </div>
         </div>
     </header>
@@ -141,7 +141,7 @@
         </div>
     </main>
 
-    <!-- Barra de Navegação Inferior Móvel (Bottom Navigation Bar) -->
+    <!-- Barra de Navegação Inferior Móvel -->
     <nav class="mobile-bottom-nav">
         <button id="navBtnAgenda" class="nav-item-btn active" type="button">
             <i class="ph ph-calendar-blank"></i>
@@ -262,7 +262,7 @@
         </form>
     </aside>
 
-    <!-- Modal de Auditoria de Geolocalização (Timeline Logística Reconstruída) -->
+    <!-- Modal de Auditoria de Geolocalização -->
     <div id="gpsModalOverlay" class="overlay-backdrop"></div>
     <div id="gpsModal" class="modal-center-card gps-timeline-modal">
         <div class="gps-modal-header">
@@ -291,7 +291,7 @@
     <div id="confirmModal" class="modal-center-card">
         <div id="confirmModalIcon" style="width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; margin: 0 auto 12px; background: var(--tea-blue-light); color: var(--tea-blue);"><i class="ph ph-question"></i></div>
         <h3 id="confirmModalTitle" style="text-align: center; font-weight: 800; font-size: 1.1rem; margin-bottom: 6px;">Confirmar Ação</h3>
-        <p id="confirmModalMessage" style="text-align: center; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 16px;">Deseja realizar esta ação?</p>
+        <div id="confirmModalMessage" style="text-align: center; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 16px;">Deseja realizar esta ação?</div>
         <div class="form-row-2">
             <button id="btnConfirmCancel" type="button" style="height: 44px; border-radius: 12px; background: var(--surface-subtle); font-weight: 700; color: var(--text-primary);">Cancelar</button>
             <button id="btnConfirmOk" type="button" class="btn-primary-tea">Confirmar</button>
@@ -302,6 +302,6 @@
     <div id="toastContainer" class="toast-container"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script src="app.js?v=30"></script>
+    <script src="app.js?v=31"></script>
 </body>
 </html>

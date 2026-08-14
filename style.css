@@ -1,5 +1,5 @@
 /* ==========================================================================
-   LUMINA SCHEDULER PRO - ULTRA COMPACT MOBILE SAAS UI & TRACKING LINE
+   LUMINA SCHEDULER PRO - SAAS DESIGN SYSTEM & TRACKING LINE
    ========================================================================== */
 
 :root {
@@ -22,6 +22,7 @@
     --tea-red-border: #ffe4e6;
 
     --tea-violet: #7c3aed;
+    --tea-violet-dark: #5b21b6;
     --tea-violet-light: #f5f3ff;
     --tea-violet-border: #ede9fe;
 
@@ -45,8 +46,6 @@
     --radius-md: 12px;
     --radius-lg: 16px;
     --radius-full: 9999px;
-
-    --touch-min: 40px;
 }
 
 /* Reset Global */
@@ -100,8 +99,7 @@ button:disabled {
 
 /* Utilitários Visuais */
 .hidden, 
-.viewer-mode .admin-only, 
-.viewer-mode #btnNewAppointmentMobile { 
+.viewer-mode .admin-only { 
     display: none !important; 
 }
 
@@ -118,10 +116,9 @@ button:disabled {
 
 .font-bold { font-weight: 700; }
 .font-extrabold { font-weight: 800; }
-
 .opacity-40 { opacity: 0.55; filter: grayscale(0.8); }
 
-/* Containers de Largura Máxima */
+/* Containers */
 .header-container,
 .nav-bar-container,
 .viewport-container {
@@ -130,7 +127,7 @@ button:disabled {
     margin: 0 auto;
 }
 
-/* App Top Header Ultra Compacto */
+/* App Header */
 .app-header {
     background: var(--surface-card);
     border-bottom: 1px solid var(--border-main);
@@ -212,7 +209,7 @@ button:disabled {
     gap: 5px;
 }
 
-/* Faixa Seletora de Data & Filtros Compacta */
+/* Seletor de Data & Filtros */
 .date-nav-bar {
     background: var(--surface-card);
     padding: 8px 14px;
@@ -258,12 +255,6 @@ button:disabled {
     padding: 0 12px;
     position: relative;
     cursor: pointer;
-    transition: background 0.15s ease, border-color 0.15s ease;
-}
-
-.date-display-box:hover {
-    background: #dbeafe;
-    border-color: #93c5fd;
 }
 
 .date-display-box input {
@@ -296,9 +287,7 @@ button:disabled {
     scrollbar-width: none;
 }
 
-.filters-scroll-row::-webkit-scrollbar {
-    display: none;
-}
+.filters-scroll-row::-webkit-scrollbar { display: none; }
 
 .search-input-box {
     min-width: 160px;
@@ -348,7 +337,7 @@ button:disabled {
     gap: 4px;
 }
 
-/* Área Principal de Conteúdo */
+/* Área Principal */
 .app-viewport {
     flex: 1;
     min-height: 0;
@@ -356,19 +345,10 @@ button:disabled {
     padding: 12px 14px 90px;
 }
 
-.tab-content {
-    display: none;
-    width: 100%;
-}
+.tab-content { display: none; width: 100%; }
+.tab-content.active { display: block; }
 
-.tab-content.active {
-    display: block;
-}
-
-/* ==========================================================================
-   CARDS DE AGENDAMENTO ULTRA COMPACTOS
-   ========================================================================== */
-
+/* Cards da Agenda */
 .agenda-cards-list {
     display: grid;
     gap: 12px;
@@ -386,17 +366,13 @@ button:disabled {
     gap: 8px;
     position: relative;
     overflow: hidden;
-    max-width: 100%;
     width: 100%;
 }
 
-/* Indicador Lateral de Turno Sutil */
 .agenda-card::before {
     content: "";
     position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
+    left: 0; top: 0; bottom: 0;
     width: 4px;
     background: var(--tea-blue);
 }
@@ -405,7 +381,6 @@ button:disabled {
     background: var(--tea-yellow);
 }
 
-/* Topo do Card */
 .card-top-bar {
     display: flex;
     align-items: center;
@@ -499,7 +474,6 @@ button:disabled {
     border-color: var(--tea-red-border);
 }
 
-/* Informações Compactas */
 .card-compact-meta {
     display: flex;
     flex-direction: column;
@@ -525,12 +499,6 @@ button:disabled {
     flex-shrink: 0;
 }
 
-.meta-line-item strong {
-    font-weight: 700;
-    color: var(--text-primary);
-}
-
-/* Faixa de Ações Rápidas */
 .card-actions-strip {
     display: flex;
     align-items: center;
@@ -576,11 +544,6 @@ button:disabled {
     align-items: center;
     gap: 4px;
     white-space: nowrap;
-}
-
-.btn-audit-gps:hover {
-    background: var(--tea-blue);
-    color: #ffffff;
 }
 
 .whatsapp-float-btn {
@@ -638,10 +601,7 @@ button:disabled {
     color: #ffffff;
 }
 
-/* ==========================================================================
-   LINHA DE RASTREIO HORIZONTAL (PROGRESS TRACKER LINE LOGÍSTICA)
-   ========================================================================== */
-
+/* Rastreamento Logístico */
 .progress-tracker-container {
     position: relative;
     width: 100%;
@@ -719,10 +679,6 @@ button:disabled {
     text-align: center;
 }
 
-.tracker-node-item.completed .tracker-node-label {
-    color: var(--tea-green);
-}
-
 .tracker-time-pill {
     font-size: 0.65rem;
     font-weight: 800;
@@ -730,10 +686,9 @@ button:disabled {
     background: var(--tea-green-light);
     padding: 1px 6px;
     border-radius: var(--radius-full);
-    line-height: 1.2;
 }
 
-/* Painel de Métricas Diárias */
+/* Painel de Métricas */
 .metrics-grid-tab {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -770,12 +725,10 @@ button:disabled {
 .metric-card-app.green { border-top: 3px solid var(--tea-green); }
 .metric-card-app.violet { border-top: 3px solid var(--tea-violet); }
 
-/* Barra de Navegação Inferior Móvel */
+/* Navegação Inferior Móvel */
 .mobile-bottom-nav {
     position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
+    bottom: 0; left: 0; right: 0;
     height: 56px;
     background: var(--surface-card);
     border-top: 1px solid var(--border-main);
@@ -800,15 +753,9 @@ button:disabled {
     font-weight: 700;
 }
 
-.nav-item-btn i {
-    font-size: 1.25rem;
-}
+.nav-item-btn i { font-size: 1.25rem; }
+.nav-item-btn.active { color: var(--tea-blue); }
 
-.nav-item-btn.active {
-    color: var(--tea-blue);
-}
-
-/* FAB Central */
 .fab-center-btn {
     width: 46px;
     height: 46px;
@@ -824,7 +771,7 @@ button:disabled {
     border: 3px solid var(--surface-card);
 }
 
-/* Overlays & Modais */
+/* Modais & Overlays */
 .overlay-backdrop {
     position: fixed;
     inset: 0;
@@ -843,9 +790,7 @@ button:disabled {
 
 .bottom-sheet {
     position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    left: 0; right: 0; bottom: 0;
     z-index: 90;
     max-height: 90vh;
     background: var(--surface-card);
@@ -858,9 +803,7 @@ button:disabled {
     overflow: hidden;
 }
 
-.bottom-sheet.active {
-    transform: translateY(0);
-}
+.bottom-sheet.active { transform: translateY(0); }
 
 .sheet-handle-bar {
     width: 36px;
@@ -947,8 +890,7 @@ button:disabled {
 
 .modal-center-card {
     position: fixed;
-    top: 50%;
-    left: 50%;
+    top: 50%; left: 50%;
     transform: translate(-50%, -50%) scale(0.95);
     z-index: 95;
     width: min(440px, calc(100vw - 24px));
@@ -965,14 +907,8 @@ button:disabled {
     transform: translate(-50%, -50%) scale(1);
 }
 
-/* ==========================================================================
-   MODAL DE TIMELINE LOGÍSTICA DE GEOLOCALIZAÇÃO
-   ========================================================================== */
-
-.gps-timeline-modal {
-    padding: 0 !important;
-    overflow: hidden;
-}
+/* Modal GPS Timeline */
+.gps-timeline-modal { padding: 0 !important; overflow: hidden; }
 
 .gps-modal-header {
     padding: 16px 18px;
@@ -984,8 +920,7 @@ button:disabled {
 }
 
 .patient-avatar-badge {
-    width: 40px;
-    height: 40px;
+    width: 40px; height: 40px;
     border-radius: 50%;
     background: var(--tea-blue-light);
     color: var(--tea-blue-dark);
@@ -998,25 +933,8 @@ button:disabled {
     flex-shrink: 0;
 }
 
-.patient-header-meta {
-    flex: 1;
-    min-width: 0;
-}
-
-.patient-header-meta h3 {
-    font-size: 1rem;
-    font-weight: 800;
-    color: var(--text-primary);
-    line-height: 1.2;
-    margin-bottom: 2px;
-    word-break: break-word;
-}
-
-.modal-date-chip {
-    font-size: 0.72rem;
-    font-weight: 700;
-    color: var(--text-muted);
-}
+.patient-header-meta { flex: 1; min-width: 0; }
+.patient-header-meta h3 { font-size: 1rem; font-weight: 800; color: var(--text-primary); margin-bottom: 2px; }
 
 .badge-status-chip {
     padding: 2px 8px;
@@ -1036,7 +954,7 @@ button:disabled {
 }
 
 .gps-timeline-body {
-    padding: 18px 18px;
+    padding: 18px;
     max-height: 60vh;
     overflow-y: auto;
     display: flex;
@@ -1045,43 +963,27 @@ button:disabled {
     background: var(--bg-app);
 }
 
-.timeline-track-group {
-    position: relative;
-    padding-left: 28px;
-}
-
+.timeline-track-group { position: relative; padding-left: 28px; }
 .timeline-track-group::before {
     content: "";
     position: absolute;
-    left: 11px;
-    top: 12px;
-    bottom: 12px;
+    left: 11px; top: 12px; bottom: 12px;
     width: 2px;
     background: var(--border-main);
 }
 
-.timeline-step-item {
-    position: relative;
-    margin-bottom: 16px;
-}
-
-.timeline-step-item:last-child {
-    margin-bottom: 0;
-}
+.timeline-step-item { position: relative; margin-bottom: 16px; }
+.timeline-step-item:last-child { margin-bottom: 0; }
 
 .timeline-dot {
     position: absolute;
-    left: -28px;
-    top: 3px;
-    width: 24px;
-    height: 24px;
+    left: -28px; top: 3px;
+    width: 24px; height: 24px;
     border-radius: 50%;
     background: #ffffff;
     border: 2px solid var(--border-main);
     color: var(--text-muted);
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: flex; align-items: center; justify-content: center;
     font-size: 0.8rem;
     z-index: 2;
 }
@@ -1103,32 +1005,9 @@ button:disabled {
     border: 1px solid var(--border-main);
     border-radius: var(--radius-md);
     padding: 12px 14px;
-    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.02);
     display: flex;
     flex-direction: column;
     gap: 6px;
-}
-
-.timeline-title-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 6px;
-}
-
-.timeline-title-row strong {
-    font-size: 0.85rem;
-    font-weight: 800;
-    color: var(--text-primary);
-}
-
-.timeline-time-pill {
-    font-size: 0.72rem;
-    font-weight: 800;
-    color: var(--tea-green);
-    background: var(--tea-green-light);
-    padding: 2px 8px;
-    border-radius: var(--radius-full);
 }
 
 .btn-maps-link {
@@ -1165,7 +1044,26 @@ button:disabled {
     font-size: 0.88rem;
 }
 
-/* Desktop Fix */
+/* Container de Toasts Empilhados */
+.toast-container {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+}
+
+.toast-container .agenda-card {
+    pointer-events: auto;
+    position: relative;
+    top: auto;
+    right: auto;
+}
+
+/* Desktop Breakpoint */
 @media (min-width: 1025px) {
     .mobile-bottom-nav {
         max-width: 440px;

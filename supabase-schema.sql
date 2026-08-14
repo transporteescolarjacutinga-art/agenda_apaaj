@@ -1,6 +1,13 @@
+-- ============================================================================
+-- LUMINA SCHEDULER PRO - BANCO DE DADOS SUPABASE (TEA)
+-- ============================================================================
+
+-- Tabela de Agendamentos e Ocorrências Diárias
 create table if not exists public.appointments (
     id text primary key,
+    base_id text default '',
     data date,
+    data_fim date,
     profissional text default '',
     tipo text default '',
     paciente text default '',
@@ -14,10 +21,6 @@ create table if not exists public.appointments (
     obs text default '',
     status text default '',
     monitora text default '',
-    gps_entrada text default '',
-    timestamp_entrada text default '',
-    gps_saida text default '',
-    timestamp_saida text default '',
     gps_buscado_escola text default '',
     timestamp_buscado_escola text default '',
     gps_entregue_ong text default '',
@@ -32,6 +35,7 @@ create table if not exists public.appointments (
     created_at timestamptz default now()
 );
 
+-- Colunas garantidas em migração
 alter table public.appointments
     add column if not exists base_id text default '',
     add column if not exists data_fim date,
@@ -47,56 +51,33 @@ alter table public.appointments
     add column if not exists ausencia_timestamp text default '',
     add column if not exists ausencia_gps text default '';
 
+-- Tabela de Monitoras de Transporte
 create table if not exists public.monitors (
     id text primary key,
     monitora text not null unique,
     created_at timestamptz default now()
 );
 
+-- Políticas de Segurança Row Level Security (RLS)
 alter table public.appointments enable row level security;
 alter table public.monitors enable row level security;
 
+-- Reset de Políticas de Agendamentos
 drop policy if exists "public appointments read" on public.appointments;
 drop policy if exists "public appointments insert" on public.appointments;
 drop policy if exists "public appointments update" on public.appointments;
 drop policy if exists "public appointments delete" on public.appointments;
 
-create policy "public appointments read"
-on public.appointments for select
-to anon
-using (true);
+create policy "public appointments read" on public.appointments for select to anon using (true);
+create policy "public appointments insert" on public.appointments for insert to anon with check (true);
+create policy "public appointments update" on public.appointments for update to anon using (true) with check (true);
+create policy "public appointments delete" on public.appointments for delete to anon using (true);
 
-create policy "public appointments insert"
-on public.appointments for insert
-to anon
-with check (true);
-
-create policy "public appointments update"
-on public.appointments for update
-to anon
-using (true)
-with check (true);
-
-create policy "public appointments delete"
-on public.appointments for delete
-to anon
-using (true);
-
+-- Reset de Políticas de Monitoras
 drop policy if exists "public monitors read" on public.monitors;
 drop policy if exists "public monitors insert" on public.monitors;
 drop policy if exists "public monitors delete" on public.monitors;
 
-create policy "public monitors read"
-on public.monitors for select
-to anon
-using (true);
-
-create policy "public monitors insert"
-on public.monitors for insert
-to anon
-with check (true);
-
-create policy "public monitors delete"
-on public.monitors for delete
-to anon
-using (true);
+create policy "public monitors read" on public.monitors for select to anon using (true);
+create policy "public monitors insert" on public.monitors for insert to anon with check (true);
+create policy "public monitors delete" on public.monitors for delete to anon using (true);

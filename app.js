@@ -72,7 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const icon = type === 'error' ? 'ph-warning-circle' : type === 'info' ? 'ph-info' : 'ph-check-circle';
         const colorClass = type === 'error' ? 'var(--tea-red)' : type === 'info' ? 'var(--tea-blue)' : 'var(--tea-green)';
         toast.className = 'agenda-card';
-        toast.style.cssText = `position: fixed; top: 16px; right: 16px; z-index: 200; padding: 10px 14px; border-left: 4px solid ${colorClass}; box-shadow: var(--shadow-sheet); animation: slideIn 0.3s ease;`;
+        toast.style.cssText = `position: relative; padding: 10px 14px; border-left: 4px solid ${colorClass}; box-shadow: var(--shadow-sheet); animation: slideIn 0.3s ease;`;
         toast.innerHTML = `<div class="flex items-center gap-2 font-bold" style="font-size:0.85rem;"><i class="ph ${icon} text-lg" style="color:${colorClass};"></i><span>${message}</span></div>`;
         container.appendChild(toast);
         setTimeout(() => toast.remove(), 3200);
@@ -146,6 +146,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const isoMatch = fixed.match(/^(\d{4})-(\d{2})-(\d{2})/);
         if (isoMatch) return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
         return fixed;
+    };
+
+    const parseExcelDate = (val) => {
+        if (!val) return localISOTime;
+        if (val instanceof Date) return val.toISOString().slice(0, 10);
+        if (typeof val === 'number') {
+            const date = new Date((val - (25567 + 2)) * 86400 * 1000);
+            return date.toISOString().slice(0, 10);
+        }
+        const str = String(val).trim();
+        if (str.match(/^\d{4}-\d{2}-\d{2}/)) return str.slice(0, 10);
+        const brMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+        if (brMatch) return `${brMatch[3]}-${brMatch[2].padStart(2, '0')}-${brMatch[1].padStart(2, '0')}`;
+        return localISOTime;
     };
 
     const WEEKDAY_INDEX = {
@@ -295,7 +309,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let appointments = parseJsonSafe(localStorage.getItem('lumina_agenda_cache'), []);
     if (!Array.isArray(appointments)) appointments = [];
 
-    // Fila de Sincronização Pendente (Garante Zero Perda de Dados)
+    // Fila de Sincronização Pendente
     let pendingSyncQueue = parseJsonSafe(localStorage.getItem('lumina_pending_sync'), []);
     if (!Array.isArray(pendingSyncQueue)) pendingSyncQueue = [];
 
@@ -461,7 +475,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     pendingSyncQueue = pendingSyncQueue.filter(p => String(p.id) !== String(item.id));
                     saveLocalState();
                 } catch(e) {
-                    console.warn(`Tentativa de sincronização pendente para ${item.paciente} aguardando próxima rodada:`, e);
+                    console.warn(`Sincronização pendente aguardando próxima tentativa para ${item.paciente}:`, e);
                 }
             }
         }
@@ -482,7 +496,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!item) return;
         const rawId = String(item.id || '');
         const baseId = item.baseId || (rawId.startsWith('proj_') ? rawId.replace(/^proj_/, '').replace(/_\d{4}-\d{2}-\d{2}$/, '') : rawId);
-        const patientClean = (item.paciente || '').trim();
 
         const deletePromises = [];
 
@@ -507,14 +520,6 @@ document.addEventListener('DOMContentLoaded', () => {
             );
         }
 
-        if (patientClean) {
-            deletePromises.push(
-                supabaseRequest(`${SUPABASE_TABLES.appointments}?paciente=ilike.${encodeURIComponent(patientClean)}`, {
-                    method: 'DELETE', headers: { Prefer: 'return=minimal' }
-                })
-            );
-        }
-
         await Promise.allSettled(deletePromises);
     }
 
@@ -528,37 +533,30 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (d && typeof d === 'object') {
                 if (d.id) deletedSet.add(String(d.id));
                 if (d.baseId) deletedSet.add(String(d.baseId));
-                if (d.paciente) deletedSet.add(normalizeFilterText(d.paciente));
             }
         });
 
         const mergedMap = new Map();
 
-        // 1. Inserir itens remotos (desde que não estejam deletados localmente)
+        // 1. Inserir itens remotos
         remoteList.forEach(remoteItem => {
             const idStr = String(remoteItem.id || '');
             const baseStr = String(remoteItem.baseId || remoteItem.base_id || '');
-            const pacNorm = normalizeFilterText(remoteItem.paciente);
 
-            const isDeleted = deletedSet.has(idStr) ||
-                              (baseStr && deletedSet.has(baseStr)) ||
-                              (pacNorm && deletedSet.has(pacNorm));
+            const isDeleted = deletedSet.has(idStr) || (baseStr && deletedSet.has(baseStr));
 
             if (!isDeleted) {
                 mergedMap.set(idStr, remoteItem);
             }
         });
 
-        // 2. Mesclar itens locais (preservando cadastros recém-criados ou pendentes de sync)
+        // 2. Mesclar itens locais
         if (Array.isArray(localList)) {
             localList.forEach(localItem => {
                 const idStr = String(localItem.id || '');
                 const baseStr = String(localItem.baseId || localItem.base_id || '');
-                const pacNorm = normalizeFilterText(localItem.paciente);
 
-                const isDeleted = deletedSet.has(idStr) ||
-                                  (baseStr && deletedSet.has(baseStr)) ||
-                                  (pacNorm && deletedSet.has(pacNorm));
+                const isDeleted = deletedSet.has(idStr) || (baseStr && deletedSet.has(baseStr));
 
                 if (isDeleted) return;
 
@@ -585,7 +583,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             let newData = Array.isArray(data) ? data.map(fromSupabaseAppointment) : [];
 
-            // Mesclar para NUNCA apagar novos cadastros locais!
             appointments = mergeAppointments(appointments, newData);
             saveLocalState();
             updateFilterOptions();
@@ -611,7 +608,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch(e) {}
     }
 
-    // ---- 4. Motor de Projeção Recorrente Perpétua (TEA Scheduler Engine) ----
+    // ---- 4. Motor de Projeção Recorrente Perpétua ----
     function getAppointmentsForDate(dateRef) {
         if (!dateRef) return appointments;
 
@@ -767,7 +764,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return concrete;
     }
 
-    // ---- 5. Controle de Abas (Mobile Bottom Nav) ----
+    // ---- 5. Controle de Abas ----
     function switchTab(tabName) {
         const tabs = {
             agenda: { btn: DOM.navAgenda, tab: DOM.tabAgenda },
@@ -806,7 +803,7 @@ document.addEventListener('DOMContentLoaded', () => {
             DOM.drawerTitle.textContent = 'Editar Agendamento';
             const { dateRef } = getDateFilterInfo();
             const currentList = getAppointmentsForDate(dateRef);
-            const item = currentList.find(a => String(a.id) === String(id));
+            const item = currentList.find(a => String(a.id) === String(id)) || appointments.find(a => String(a.id) === String(id) || String(a.baseId) === String(id));
             if (item) {
                 if (DOM.editScopeGroup) DOM.editScopeGroup.classList.remove('hidden');
                 if (document.getElementById('editScope')) document.getElementById('editScope').value = 'forward';
@@ -814,7 +811,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('formProfissional').value = item.profissional || '';
                 document.getElementById('formTipo').value = item.tipo || '';
                 document.getElementById('formPaciente').value = item.paciente || '';
-                if (document.getElementById('formDataInicio')) document.getElementById('formDataInicio').value = item.data || localISOTime;
+                if (document.getElementById('formDataInicio')) document.getElementById('formDataInicio').value = item.data || dateRef || localISOTime;
                 document.getElementById('formInicio').value = item.inicio || '';
                 document.getElementById('formTermino').value = item.termino || '';
                 document.getElementById('formEscola').value = item.escola || '';
@@ -976,7 +973,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (DOM.btnDismissGpsModal) DOM.btnDismissGpsModal.addEventListener('click', closeGpsModal);
     if (DOM.gpsModalOverlay) DOM.gpsModalOverlay.addEventListener('click', closeGpsModal);
 
-    // ---- 8. Submissão do Formulário (CREATE & UPDATE - Zero Perda) ----
+    // ---- 8. Submissão do Formulário (CREATE & UPDATE) ----
     DOM.form.addEventListener('submit', async (e) => {
         e.preventDefault();
         if (!isAdmin()) { showToast('Acesso negado.', 'error'); return; }
@@ -999,9 +996,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (id) {
             const { dateRef } = getDateFilterInfo();
             const currentList = getAppointmentsForDate(dateRef);
-            const existing = currentList.find(a => String(a.id) === String(id));
+            const existing = currentList.find(a => String(a.id) === String(id)) || appointments.find(a => String(a.id) === String(id) || String(a.baseId) === String(id));
             if (existing) {
-                const scope = document.getElementById('editScope')?.value || 'patient';
+                const scope = document.getElementById('editScope')?.value || 'forward';
                 const rawId = String(existing.id);
                 const baseId = existing.baseId || (rawId.startsWith('proj_') ? rawId.replace(/^proj_/, '').replace(/_\d{4}-\d{2}-\d{2}$/, '') : rawId);
 
@@ -1019,6 +1016,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     target.transporte = transpVal;
                     target.obs = obsVal;
                     target.isProjected = false;
+                    target._updatedAt = Date.now();
 
                     saveLocalState();
                     updateFilterOptions(); render(); closeDrawer();
@@ -1032,41 +1030,92 @@ document.addEventListener('DOMContentLoaded', () => {
                         const prevDate = new Date(effectiveDate);
                         prevDate.setDate(prevDate.getDate() - 1);
                         baseTemplate.dataFim = prevDate.toISOString().split('T')[0];
+                        baseTemplate._updatedAt = Date.now();
                         await supabaseUpdateAppointment(baseTemplate);
+
+                        const newSeriesRecord = {
+                            id: `${Date.now()}_rec_${Math.random().toString(36).substr(2, 5)}`,
+                            data: effectiveDate,
+                            dataFim: '',
+                            profissional: pVal,
+                            tipo: tVal,
+                            paciente: pacVal,
+                            dia: getWeekdayFromISO(effectiveDate),
+                            turno: turnoCalculado,
+                            inicio: fInicio,
+                            termino: fTermino,
+                            escola: escVal,
+                            telefone: telVal,
+                            transporte: transpVal,
+                            obs: obsVal,
+                            status: '',
+                            monitora: '',
+                            isProjected: false,
+                            _updatedAt: Date.now()
+                        };
+                        appointments.push(newSeriesRecord);
+
+                        appointments.forEach(a => {
+                            if (a.baseId === baseId && a.data >= effectiveDate) {
+                                a.baseId = newSeriesRecord.id;
+                                a.profissional = pVal;
+                                a.tipo = tVal;
+                                a.paciente = pacVal;
+                                a.escola = escVal;
+                                a.telefone = telVal;
+                                a.transporte = transpVal;
+                                a.inicio = fInicio;
+                                a.termino = fTermino;
+                                a.turno = turnoCalculado;
+                                a.obs = obsVal;
+                                a._updatedAt = Date.now();
+                            }
+                        });
+
+                        saveLocalState();
+                        updateFilterOptions(); render(); closeDrawer();
+                        await supabaseCreateAppointments([newSeriesRecord]);
+                        showToast('Série atualizada a partir desta data!');
+                    } else {
+                        let target = baseTemplate || existing;
+                        target.profissional = pVal;
+                        target.tipo = tVal;
+                        target.paciente = pacVal;
+                        target.turno = turnoCalculado;
+                        target.inicio = fInicio;
+                        target.termino = fTermino;
+                        target.escola = escVal;
+                        target.telefone = telVal;
+                        target.transporte = transpVal;
+                        target.obs = obsVal;
+                        target._updatedAt = Date.now();
+
+                        const recordsToUpdate = [target];
+                        appointments.forEach(a => {
+                            const aBase = a.baseId || (String(a.id).includes('_') ? String(a.id).split('_')[0] : String(a.id));
+                            if ((aBase === baseId || a.baseId === baseId) && a !== target) {
+                                a.profissional = pVal;
+                                a.tipo = tVal;
+                                a.paciente = pacVal;
+                                a.escola = escVal;
+                                a.telefone = telVal;
+                                a.transporte = transpVal;
+                                a.inicio = fInicio;
+                                a.termino = fTermino;
+                                a.turno = turnoCalculado;
+                                a.obs = obsVal;
+                                a._updatedAt = Date.now();
+                                recordsToUpdate.push(a);
+                            }
+                        });
+
+                        saveLocalState();
+                        updateFilterOptions(); render(); closeDrawer();
+                        await supabaseCreateAppointments(recordsToUpdate);
+                        showToast('Série de agendamentos atualizada!');
                     }
-
-                    const newSeriesRecord = {
-                        id: `${Date.now()}_rec_${Math.random().toString(36).substr(2, 5)}`,
-                        data: effectiveDate,
-                        dataFim: '',
-                        profissional: pVal,
-                        tipo: tVal,
-                        paciente: pacVal,
-                        dia: getWeekdayFromISO(effectiveDate),
-                        turno: turnoCalculado,
-                        inicio: fInicio,
-                        termino: fTermino,
-                        escola: escVal,
-                        telefone: telVal,
-                        transporte: transpVal,
-                        obs: obsVal,
-                        status: '',
-                        monitora: '',
-                        isProjected: false
-                    };
-                    appointments.push(newSeriesRecord);
-
-                    saveLocalState();
-                    updateFilterOptions(); render(); closeDrawer();
-                    await supabaseCreateAppointments([newSeriesRecord]);
-                    showToast('Série atualizada a partir desta data!');
                 } else {
-                    let target = appointments.find(a => String(a.id) === String(baseId) || String(a.id) === String(rawId));
-                    if (!target) {
-                        target = existing;
-                        if (!appointments.includes(target)) appointments.push(target);
-                    }
-                    target.id = baseId;
+                    let target = appointments.find(a => String(a.id) === String(baseId) || String(a.id) === String(rawId)) || existing;
                     target.profissional = pVal;
                     target.tipo = tVal;
                     target.paciente = pacVal;
@@ -1079,25 +1128,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     target.obs = obsVal;
                     target.isProjected = false;
                     target.dataFim = '';
+                    target._updatedAt = Date.now();
                     if (dataInicioVal) {
                         target.data = dataInicioVal;
                         target.dia = getWeekdayFromISO(dataInicioVal) || target.dia;
                     }
 
-                    const targetPatientNorm = normalizeFilterText(pacVal);
-                    const targetDiaNorm = normalizeFilterText(target.dia || getWeekdayFromISO(dataInicioVal));
-                    const effectiveStartDate = dataInicioVal || dateRef || '1970-01-01';
-
                     const recordsToUpdate = [target];
-
                     appointments.forEach(a => {
-                        const aPatientNorm = normalizeFilterText(a.paciente);
-                        const aDiaNorm = normalizeFilterText(a.dia || getWeekdayFromISO(a.data));
-
-                        const isSameSeries = (a.baseId && a.baseId === baseId) ||
-                            (aPatientNorm === targetPatientNorm && aDiaNorm === targetDiaNorm && (!a.data || a.data >= effectiveStartDate));
-
-                        if (isSameSeries && a !== target) {
+                        const aBase = a.baseId || (String(a.id).includes('_') ? String(a.id).split('_')[0] : String(a.id));
+                        if ((aBase === baseId || a.baseId === baseId) && a !== target) {
                             a.profissional = pVal;
                             a.tipo = tVal;
                             a.paciente = pacVal;
@@ -1108,6 +1148,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             a.termino = fTermino;
                             a.turno = turnoCalculado;
                             a.obs = obsVal;
+                            a._updatedAt = Date.now();
                             recordsToUpdate.push(a);
                         }
                     });
@@ -1119,7 +1160,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         } else {
-            // CRIAR NOVO AGENDAMENTO RECORRENTE (SALVAMENTO LOCAL PRIMÁRIO)
+            // CRIAR NOVO AGENDAMENTO RECORRENTE
             const newRecord = {
                 id: `${Date.now()}_rec_${Math.random().toString(36).substr(2, 5)}`,
                 data: dataInicioVal,
@@ -1137,7 +1178,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 obs: obsVal,
                 status: '',
                 monitora: '',
-                isProjected: false
+                isProjected: false,
+                _updatedAt: Date.now()
             };
 
             appointments.push(newRecord);
@@ -1372,7 +1414,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const turnoLabel = normalizeTurnoLabel(item.turno, item.inicio);
             const turnoClass = turnoLabel === 'Tarde' ? 'turno-tarde' : '';
             const phone = normalizeWhatsappPhone(item.telefone);
-            const wppLink = phone ? `https://wa.me/${phone}` : '#';
             const dayBadgeText = getItemDayBadgeText(item);
             const effectiveItemDate = item.data || dateRef || localISOTime;
 
@@ -1616,16 +1657,12 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (rawId) deletedIdsQueue.push(rawId);
                             if (baseId) deletedIdsQueue.push(baseId);
 
-                            const patientNorm = normalizeFilterText(item.paciente);
-
                             appointments = appointments.filter(a => {
                                 const aId = String(a.id);
-                                const aNorm = normalizeFilterText(a.paciente);
                                 const aBase = String(a.baseId || '');
 
                                 if (aId === targetId || aId === rawId || aId === baseId) return false;
                                 if (aBase && (aBase === baseId || aBase === rawId || aBase === targetId)) return false;
-                                if (patientNorm && aNorm === patientNorm) return false;
                                 return true;
                             });
 
@@ -1715,14 +1752,20 @@ document.addEventListener('DOMContentLoaded', () => {
             const end = DOM.reportEndDate?.value;
             if (!start || !end || start > end) { showToast('Informe o período corretamente.', 'error'); return; }
             
-            const startDt = new Date(start + 'T00:00:00');
-            const endDt = new Date(end + 'T00:00:00');
+            const startParts = start.split('-');
+            const endParts = end.split('-');
+            const startDt = new Date(parseInt(startParts[0], 10), parseInt(startParts[1], 10) - 1, parseInt(startParts[2], 10));
+            const endDt = new Date(parseInt(endParts[0], 10), parseInt(endParts[1], 10) - 1, parseInt(endParts[2], 10));
             
             const allPeriodRecords = [];
             const curr = new Date(startDt);
             
             while (curr <= endDt) {
-                const dateStr = curr.toISOString().split('T')[0];
+                const y = curr.getFullYear();
+                const m = String(curr.getMonth() + 1).padStart(2, '0');
+                const d = String(curr.getDate()).padStart(2, '0');
+                const dateStr = `${y}-${m}-${d}`;
+
                 const dayRecords = getAppointmentsForDate(dateStr);
                 dayRecords.forEach(rec => {
                     allPeriodRecords.push({ ...rec, reportDate: dateStr });
@@ -1817,19 +1860,19 @@ document.addEventListener('DOMContentLoaded', () => {
                         const obsVal = row.Obs || row.obs || row.Observações || '';
                         const fInicio = row.Início || row.Inicio || row.inicio || '08:00';
                         const fTermino = row.Término || row.Termino || row.termino || '09:00';
-                        const dataVal = row.Data || row.data || localISOTime;
+                        const dataVal = parseExcelDate(row.Data || row.data);
 
                         if (pacVal && pVal) {
                             const horaInicio = parseInt(String(fInicio).split(':')[0], 10) || 8;
                             const turnoCalculado = horaInicio >= 12 ? 'Tarde' : 'Manhã';
                             const rec = {
                                 id: `${Date.now()}_imp_${Math.random().toString(36).substr(2, 5)}`,
-                                data: String(dataVal).substring(0, 10),
+                                data: dataVal,
                                 dataFim: '',
                                 profissional: fixTextEncoding(pVal),
                                 tipo: fixTextEncoding(tVal),
                                 paciente: fixTextEncoding(pacVal),
-                                dia: getWeekdayFromISO(String(dataVal).substring(0, 10)),
+                                dia: getWeekdayFromISO(dataVal),
                                 turno: turnoCalculado,
                                 inicio: String(fInicio).substring(0, 5),
                                 termino: String(fTermino).substring(0, 5),
@@ -1839,7 +1882,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                 obs: fixTextEncoding(obsVal),
                                 status: '',
                                 monitora: '',
-                                isProjected: false
+                                isProjected: false,
+                                _updatedAt: Date.now()
                             };
                             importedRecords.push(rec);
                             appointments.push(rec);
@@ -1875,7 +1919,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     setInterval(updateClock, 1000); updateClock();
 
-    // Renderização local instantânea antes da rede
     updateFilterOptions();
     render();
 
