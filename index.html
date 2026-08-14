@@ -3,221 +3,215 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Transporte Especial - Novo Olhar (TEA)</title>
+    <title>Transporte Novo Olhar - Agenda TEA</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#2563eb">
     <link rel="apple-touch-icon" href="logo-ong.png">
-    <link rel="stylesheet" href="style.css?v=31">
+    <link rel="stylesheet" href="style.css?v=42">
 </head>
 <body class="viewer-mode">
 
-    <!-- Topbar Header Fixo -->
-    <header class="app-header">
-        <div class="header-container">
-            <div class="brand-wrapper">
-                <img src="logo-ong.png" alt="Novo Olhar">
-                <div class="brand-title-group">
-                    <h1>Transporte Novo Olhar</h1>
-                    <p>Agenda TEA 2026</p>
+    <!-- Topbar Fixo -->
+    <header class="top-header">
+        <div class="header-content">
+            <div class="brand-group">
+                <img src="logo-ong.png" alt="Logo Novo Olhar" class="brand-logo">
+                <div class="brand-info">
+                    <h1 class="brand-title">Transporte Novo Olhar</h1>
+                    <span class="brand-subtitle">Gestão Logística TEA</span>
                 </div>
             </div>
-            <div class="header-right-actions">
-                <div class="live-clock-badge">
-                    <i class="ph ph-clock text-tea-blue"></i>
-                    <span id="liveClock">--:--</span>
+            <div class="header-actions">
+                <div class="live-clock">
+                    <i class="ph ph-clock text-blue"></i>
+                    <span id="liveClockDisplay">00:00</span>
                 </div>
-                <button id="btnImportExcel" class="header-btn admin-only" type="button" title="Importar Planilha (XLSX/CSV)"><i class="ph ph-file-arrow-up"></i></button>
-                <button id="btnAdminLogin" class="header-btn" type="button" title="Acesso Coordenador"><i class="ph ph-lock-key"></i></button>
-                <button id="btnAdminLogout" class="header-btn hidden" type="button" title="Sair do Modo Admin"><i class="ph ph-lock-key-open"></i></button>
+                <button id="btnImportExcel" type="button" class="action-btn admin-only" title="Importar Planilha Excel"><i class="ph ph-file-arrow-up"></i></button>
+                <button id="btnAdminAuth" type="button" class="action-btn" title="Login Coordenador"><i class="ph ph-lock-key"></i></button>
+                <button id="btnAdminLogout" type="button" class="action-btn hidden" title="Sair do Modo Coordenador"><i class="ph ph-lock-key-open"></i></button>
             </div>
         </div>
     </header>
 
-    <!-- Faixa Seletora de Data & Filtros -->
-    <section class="date-nav-bar">
-        <div class="nav-bar-container">
-            <div class="date-picker-row">
-                <button id="btnPrevDay" class="date-arrow-btn" type="button" aria-label="Dia Anterior"><i class="ph ph-caret-left"></i></button>
-                <div class="date-display-box">
-                    <input type="date" id="filterDataRef">
-                    <div class="date-display-text">
+    <!-- Control Bar de Data e Filtros -->
+    <section class="control-bar">
+        <div class="control-content">
+            <div class="date-navigator">
+                <button id="btnDatePrev" type="button" class="nav-arrow-btn" aria-label="Dia Anterior"><i class="ph ph-caret-left"></i></button>
+                <div id="datePickerBox" class="date-picker-box">
+                    <input type="date" id="inputDateRef">
+                    <div class="date-label-content">
                         <i class="ph ph-calendar-blank"></i>
-                        <span id="displayDateLabel">Carregando...</span>
+                        <span id="txtDateLabel">Carregando data...</span>
                     </div>
                 </div>
-                <button id="btnNextDay" class="date-arrow-btn" type="button" aria-label="Próximo Dia"><i class="ph ph-caret-right"></i></button>
+                <button id="btnDateNext" type="button" class="nav-arrow-btn" aria-label="Próximo Dia"><i class="ph ph-caret-right"></i></button>
             </div>
 
-            <div class="filters-scroll-row">
-                <div class="search-input-box">
+            <div class="filter-strip">
+                <div class="search-box">
                     <i class="ph ph-magnifying-glass"></i>
-                    <input type="text" id="filterPaciente" placeholder="Buscar por paciente...">
+                    <input type="text" id="inputSearchPatient" placeholder="Buscar aluno/paciente...">
                 </div>
-                <select id="filterProfissional" class="filter-select">
+                <select id="selectProfFilter" class="filter-dropdown">
                     <option value="">Profissionais</option>
                 </select>
-                <select id="filterTurno" class="filter-select">
+                <select id="selectShiftFilter" class="filter-dropdown">
                     <option value="">Turnos</option>
                     <option value="Manhã">Manhã</option>
                     <option value="Tarde">Tarde</option>
                 </select>
-                <select id="filterEscola" class="filter-select">
+                <select id="selectSchoolFilter" class="filter-dropdown">
                     <option value="">Instituições</option>
                 </select>
-                <button id="btnClearFilters" class="clear-filter-btn hidden" type="button"><i class="ph ph-funnel-x"></i> Limpar</button>
+                <button id="btnResetFilters" type="button" class="reset-filter-btn hidden"><i class="ph ph-funnel-x"></i> Limpar</button>
             </div>
         </div>
     </section>
 
-    <!-- Área Principal (App Viewport) -->
-    <main class="app-viewport">
-        <div class="viewport-container">
-            <!-- Aba 1: Agenda de Atendimentos -->
-            <section id="tabAgenda" class="tab-content active">
-                <div id="agendaList" class="agenda-cards-list"></div>
+    <!-- Visualizador Principal -->
+    <main class="main-viewport">
+        <div class="viewport-content">
+
+            <!-- Aba 1: Agenda Diária -->
+            <section id="tabAgenda" class="tab-pane active">
+                <div id="scheduleCardsContainer" class="cards-grid"></div>
             </section>
 
-            <!-- Aba 2: Gerenciamento de Monitoras -->
-            <section id="tabMonitors" class="tab-content">
-                <div class="metric-card-app violet mb-4">
-                    <span>Gerenciamento de Equipe</span>
-                    <strong>Monitoras Cadastradas</strong>
+            <!-- Aba 2: Equipe de Campo (Monitoras) -->
+            <section id="tabMonitors" class="tab-pane">
+                <div class="dashboard-banner purple">
+                    <span>Equipe de Campo</span>
+                    <h2>Monitoras de Transporte</h2>
                 </div>
-                <div class="card-info-grid mb-4" style="grid-template-columns: 1fr auto;">
-                    <input type="text" id="newMonitorName" placeholder="Nome da nova monitora" style="height: 44px; padding: 0 14px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; font-weight: 600;">
-                    <button id="btnAddMonitor" type="button" class="btn-primary-tea" style="padding: 0 18px;"><i class="ph ph-plus-circle"></i> Adicionar</button>
+                <div class="add-monitor-box">
+                    <input type="text" id="inputNewMonitor" placeholder="Nome da monitora">
+                    <button id="btnAddMonitor" type="button" class="btn-submit"><i class="ph ph-plus-circle"></i> Cadastrar</button>
                 </div>
-                <div id="monitorsList" class="agenda-cards-list"></div>
+                <div id="monitorsListContainer" class="cards-grid"></div>
             </section>
 
-            <!-- Aba 3: Resumo & Métricas -->
-            <section id="tabMetrics" class="tab-content">
-                <div class="metrics-grid-tab">
-                    <button type="button" id="dashTotalCard" class="metric-card-app blue">
-                        <span>Atendimentos do Dia</span>
-                        <strong id="dashTotal">0</strong>
+            <!-- Aba 3: Resumo Operacional (KPIs) -->
+            <section id="tabSummary" class="tab-pane">
+                <div class="kpi-grid">
+                    <button type="button" id="btnKpiTotal" class="kpi-card blue">
+                        <span>Total de Atendimentos</span>
+                        <strong id="kpiTotal">0</strong>
                     </button>
-                    <button type="button" id="dashMorningCard" class="metric-card-app yellow">
+                    <button type="button" id="btnKpiMorning" class="kpi-card yellow">
                         <span>Turno Manhã</span>
-                        <strong id="dashMorning">0</strong>
+                        <strong id="kpiMorning">0</strong>
                     </button>
-                    <button type="button" id="dashAfternoonCard" class="metric-card-app green">
+                    <button type="button" id="btnKpiAfternoon" class="kpi-card green">
                         <span>Turno Tarde</span>
-                        <strong id="dashAfternoon">0</strong>
+                        <strong id="kpiAfternoon">0</strong>
                     </button>
                 </div>
 
-                <div class="metric-card-app violet">
-                    <div class="flex justify-between items-center mb-2">
-                        <span style="color: var(--text-primary); font-size: 0.85rem;">Instituições atendidas hoje</span>
-                        <strong id="dashSchoolsCount" style="font-size: 1.1rem; color: var(--tea-violet-dark);">0</strong>
+                <div class="dashboard-banner purple mt-4">
+                    <div class="flex-between">
+                        <span>Instituições Atendidas</span>
+                        <strong id="kpiSchoolsCount" class="badge-count">0</strong>
                     </div>
-                    <div id="dashSchools" class="flex flex-col gap-2"></div>
+                    <div id="schoolsListContainer" class="schools-stack mt-2"></div>
                 </div>
             </section>
 
-            <!-- Aba 4: Gerador de Relatórios -->
-            <section id="tabReports" class="tab-content">
-                <div class="metric-card-app blue mb-4">
-                    <span>Relatório PDF</span>
-                    <strong>Gerar Relatório por Período</strong>
+            <!-- Aba 4: Gerador de Relatórios PDF -->
+            <section id="tabReports" class="tab-pane">
+                <div class="dashboard-banner blue mb-4">
+                    <span>Emissão de Documentos</span>
+                    <h2>Relatório PDF por Período</h2>
                 </div>
-                <div class="agenda-card">
-                    <div class="form-group-mobile">
+                <div class="form-card">
+                    <div class="field-group">
                         <label>Data Inicial</label>
                         <input type="date" id="reportStartDate">
                     </div>
-                    <div class="form-group-mobile">
+                    <div class="field-group">
                         <label>Data Final</label>
                         <input type="date" id="reportEndDate">
                     </div>
-                    <button id="btnGenerateReport" type="button" class="btn-primary-tea"><i class="ph ph-file-pdf"></i> Gerar Relatório PDF</button>
+                    <button id="btnGenerateReportPdf" type="button" class="btn-submit"><i class="ph ph-file-pdf"></i> Gerar Relatório PDF</button>
                 </div>
             </section>
+
         </div>
     </main>
 
-    <!-- Barra de Navegação Inferior Móvel -->
-    <nav class="mobile-bottom-nav">
-        <button id="navBtnAgenda" class="nav-item-btn active" type="button">
+    <!-- Navegação Inferior Móvel -->
+    <nav class="bottom-nav-bar">
+        <button id="navTabAgenda" type="button" class="nav-tab-btn active">
             <i class="ph ph-calendar-blank"></i>
             <span>Agenda</span>
         </button>
-        <button id="navBtnMonitors" class="nav-item-btn admin-only" type="button">
+        <button id="navTabMonitors" type="button" class="nav-tab-btn admin-only">
             <i class="ph ph-users-three"></i>
             <span>Monitoras</span>
         </button>
-        <button id="navBtnNew" class="fab-center-btn admin-only" type="button" title="Novo Agendamento">
+        <button id="navFabNew" type="button" class="fab-btn admin-only" title="Novo Agendamento">
             <i class="ph ph-plus"></i>
         </button>
-        <button id="navBtnMetrics" class="nav-item-btn" type="button">
+        <button id="navTabSummary" type="button" class="nav-tab-btn">
             <i class="ph ph-chart-pie-slice"></i>
             <span>Resumo</span>
         </button>
-        <button id="navBtnReports" class="nav-item-btn admin-only" type="button">
+        <button id="navTabReports" type="button" class="nav-tab-btn admin-only">
             <i class="ph ph-file-pdf"></i>
             <span>Relatórios</span>
         </button>
     </nav>
 
-    <!-- Inputs ocultos para importação -->
-    <input type="file" id="excelImportInput" class="hidden" accept=".xlsx,.xls,.csv">
+    <!-- Upload Oculto para Planilhas -->
+    <input type="file" id="inputExcelFile" class="hidden" accept=".xlsx,.xls,.csv">
 
-    <!-- Bottom Sheet Form (Drawer Móvel) -->
-    <div id="drawerOverlay" class="overlay-backdrop"></div>
-    <aside id="drawer" class="bottom-sheet">
-        <div class="sheet-handle-bar"></div>
-        <div class="sheet-header">
+    <!-- Drawer Formulário (Bottom Sheet Simplificado) -->
+    <div id="drawerBackdrop" class="backdrop-overlay"></div>
+    <aside id="drawerSheet" class="bottom-drawer">
+        <div class="drawer-handle"></div>
+        <div class="drawer-header">
             <h2 id="drawerTitle">Novo Agendamento</h2>
-            <button id="closeDrawer" type="button" class="close-modal-btn"><i class="ph ph-x"></i></button>
+            <button id="btnCloseDrawer" type="button" class="close-btn"><i class="ph ph-x"></i></button>
         </div>
-        <form id="appointmentForm" class="sheet-form-body">
-            <input type="hidden" id="formId">
-            <div id="editScopeGroup" class="form-group-mobile hidden" style="background: var(--tea-blue-light); padding: 10px; border-radius: 12px;">
-                <label style="color: var(--tea-blue-dark);">Aplicar edição em:</label>
-                <select id="editScope">
-                    <option value="forward">Da data selecionada em diante (Manter histórico anterior)</option>
-                    <option value="day">Apenas este dia especificamente</option>
-                    <option value="patient">Toda a série recorrente (incluindo o passado)</option>
-                </select>
-            </div>
-            <div class="form-row-2">
-                <div class="form-group-mobile">
+        <form id="scheduleForm" class="drawer-form">
+            <input type="hidden" id="fieldScheduleId">
+            <div class="grid-2">
+                <div class="field-group">
                     <label>Profissional</label>
-                    <input type="text" id="formProfissional" required placeholder="Ex: Juliana">
+                    <input type="text" id="fieldProfessional" required placeholder="Ex: Juliana">
                 </div>
-                <div class="form-group-mobile">
-                    <label>Atendimento</label>
-                    <input type="text" id="formTipo" required placeholder="Ex: Psicóloga">
+                <div class="field-group">
+                    <label>Atendimento/Especialidade</label>
+                    <input type="text" id="fieldTherapy" required placeholder="Ex: Psicóloga">
                 </div>
             </div>
-            <div class="form-group-mobile">
-                <label>Paciente</label>
-                <input type="text" id="formPaciente" required placeholder="Nome completo">
+            <div class="field-group">
+                <label>Nome do Aluno/Paciente</label>
+                <input type="text" id="fieldPatient" required placeholder="Nome completo">
             </div>
-            <div class="form-group-mobile">
+            <div class="field-group">
                 <label>Data de Início da Série</label>
-                <input type="date" id="formDataInicio" required>
+                <input type="date" id="fieldStartDate" required>
             </div>
-            <div class="form-row-2">
-                <div class="form-group-mobile">
-                    <label>Início</label>
-                    <input type="time" id="formInicio" required>
+            <div class="grid-2">
+                <div class="field-group">
+                    <label>Horário de Início</label>
+                    <input type="time" id="fieldStartTime" required>
                 </div>
-                <div class="form-group-mobile">
-                    <label>Término</label>
-                    <input type="time" id="formTermino" required>
+                <div class="field-group">
+                    <label>Horário de Término</label>
+                    <input type="time" id="fieldEndTime" required>
                 </div>
             </div>
-            <div class="form-row-2">
-                <div class="form-group-mobile">
-                    <label>Instituição</label>
-                    <select id="formEscola">
-                        <option value="">Selecione...</option>
+            <div class="grid-2">
+                <div class="field-group">
+                    <label>Instituição de Ensino</label>
+                    <select id="fieldSchool">
+                        <option value="">Selecione a escola...</option>
                         <option value="EE FLORIANO SARETTI">EE FLORIANO SARETTI</option>
                         <option value="EE JULIO BRANDAO">EE JULIO BRANDAO</option>
                         <option value="EM PROFESSOR ALFEU DUARTE">EM PROFESSOR ALFEU DUARTE</option>
@@ -241,67 +235,64 @@
                         <option value="EBENEZER">EBENEZER</option>
                     </select>
                 </div>
-                <div class="form-group-mobile">
-                    <label>Telefone</label>
-                    <input type="tel" id="formTelefone" placeholder="11999999999">
+                <div class="field-group">
+                    <label>Telefone dos Responsáveis</label>
+                    <input type="tel" id="fieldPhone" placeholder="11999999999">
                 </div>
             </div>
-            <div class="form-group-mobile">
+            <div class="field-group">
                 <label>Trajeto de Transporte</label>
-                <select id="formTransporte">
+                <select id="fieldTransport">
                     <option value="Ambos">Entrada e Saída (Ida e Volta)</option>
                     <option value="Entrada">Somente Entrada</option>
                     <option value="Saída">Somente Saída</option>
                 </select>
             </div>
-            <div class="form-group-mobile">
-                <label>Observações</label>
-                <input type="text" id="formObs" placeholder="Ex: CONFIRMADO">
+            <div class="field-group">
+                <label>Observações Adicionais</label>
+                <input type="text" id="fieldNotes" placeholder="Ex: CONFIRMADO">
             </div>
-            <button type="submit" class="btn-primary-tea">Salvar Agendamento</button>
+            <button type="submit" class="btn-submit">Salvar Agendamento</button>
         </form>
     </aside>
 
-    <!-- Modal de Auditoria de Geolocalização -->
-    <div id="gpsModalOverlay" class="overlay-backdrop"></div>
-    <div id="gpsModal" class="modal-center-card gps-timeline-modal">
-        <div class="gps-modal-header">
-            <div class="patient-avatar-badge" id="gpsModalAvatar">--</div>
-            <div class="patient-header-meta">
-                <h3 id="gpsModalPatient">Paciente</h3>
-                <div class="flex items-center gap-2">
-                    <span id="gpsModalDate" class="modal-date-chip">05/08/2026</span>
-                    <span id="gpsModalStatusBadge" class="badge-status-chip">Concluído</span>
+    <!-- Modal Auditoria GPS -->
+    <div id="gpsModalBackdrop" class="backdrop-overlay"></div>
+    <div id="gpsModal" class="center-modal gps-modal">
+        <div class="gps-modal-head">
+            <div class="patient-avatar" id="gpsModalAvatar">--</div>
+            <div class="patient-meta">
+                <h3 id="gpsModalPatientName">Aluno</h3>
+                <div class="chip-row">
+                    <span id="gpsModalDateLabel" class="date-chip">00/00/0000</span>
+                    <span id="gpsModalStatusBadge" class="status-chip">Concluído</span>
                 </div>
             </div>
-            <button id="btnCloseGpsModal" type="button" class="close-modal-btn"><i class="ph ph-x"></i></button>
+            <button id="btnCloseGpsModal" type="button" class="close-btn"><i class="ph ph-x"></i></button>
         </div>
-
-        <div id="gpsModalBody" class="gps-timeline-body">
-            <!-- Timeline inserida via JS -->
-        </div>
-
-        <div class="gps-modal-footer">
-            <button id="btnDismissGpsModal" type="button" class="btn-modal-close-full">Fechar Comprovação</button>
+        <div id="gpsModalTimelineBody" class="gps-modal-body"></div>
+        <div class="gps-modal-foot">
+            <button id="btnDismissGpsModal" type="button" class="btn-secondary">Fechar Comprovação</button>
         </div>
     </div>
 
-    <!-- Modal de Confirmação Mobile -->
-    <div id="confirmModalOverlay" class="overlay-backdrop"></div>
-    <div id="confirmModal" class="modal-center-card">
-        <div id="confirmModalIcon" style="width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; margin: 0 auto 12px; background: var(--tea-blue-light); color: var(--tea-blue);"><i class="ph ph-question"></i></div>
-        <h3 id="confirmModalTitle" style="text-align: center; font-weight: 800; font-size: 1.1rem; margin-bottom: 6px;">Confirmar Ação</h3>
-        <div id="confirmModalMessage" style="text-align: center; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 16px;">Deseja realizar esta ação?</div>
-        <div class="form-row-2">
-            <button id="btnConfirmCancel" type="button" style="height: 44px; border-radius: 12px; background: var(--surface-subtle); font-weight: 700; color: var(--text-primary);">Cancelar</button>
-            <button id="btnConfirmOk" type="button" class="btn-primary-tea">Confirmar</button>
+    <!-- Modal Confirmação -->
+    <div id="confirmModalBackdrop" class="backdrop-overlay"></div>
+    <div id="confirmModal" class="center-modal confirm-modal">
+        <div class="confirm-icon"><i class="ph ph-trash"></i></div>
+        <h3 id="confirmModalTitle">Confirmar Ação</h3>
+        <div id="confirmModalText" class="confirm-text">Deseja prosseguir com esta alteração?</div>
+        <div class="grid-2 mt-4">
+            <button id="btnConfirmCancel" type="button" class="btn-secondary">Cancelar</button>
+            <button id="btnConfirmSubmit" type="button" class="btn-submit">Confirmar</button>
         </div>
     </div>
 
-    <!-- Container de Toasts -->
-    <div id="toastContainer" class="toast-container"></div>
+    <!-- Container Toast Notifications -->
+    <div id="toastContainer" class="toast-stack"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script src="app.js?v=31"></script>
+    <script src="initial-data.js?v=42"></script>
+    <script src="app.js?v=42"></script>
 </body>
 </html>

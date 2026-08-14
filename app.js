@@ -1,155 +1,187 @@
 /**
  * Lumina Scheduler Pro - Sistema de Gestão de Transporte Especial (TEA)
- * Módulo de CRUD Resiliente, Offline-First, Projeção Recorrente e Auditoria GPS
+ * Engine LuminaApp — CRUD Completo e Padronizado com Instâncias Concretas e Integridade Total
+ *
+ * ============================================================================
+ * PADRONIZAÇÕES DO CRUD IMPLEMENTADAS CONFORME ANÁLISE:
+ * ============================================================================
+ * 1. CREATE:
+ *    - Validação de duplicidade exata (mesmo paciente + profissional + data + horário).
+ *    - Importação Excel com persistência em lote rápida (chunks no Supabase).
+ *    - Adição de monitoras com validação de duplicidade insensível a maiúsculas/minúsculas.
+ *
+ * 2. READ:
+ *    - getSchedulesForDate() suporta múltiplos agendamentos legítimos do mesmo paciente no dia
+ *      (ex.: turnos diferentes ou horários distintos) utilizando chave composta por horário.
+ *    - Instância concreta da data substitui o template semanal apenas para aquele slot específico.
+ *
+ * 3. UPDATE:
+ *    - Edição via Drawer utiliza ensureConcreteSchedule(), garantindo que edições pontuais
+ *      sejam restritas à data selecionada, sem corromper o template semanal global.
+ *    - Alteração de monitora via <select> também utiliza ensureConcreteSchedule().
+ *    - recomputeStatus() recalcula o CSV de status automaticamente em todas as alterações.
+ *
+ * 4. DELETE:
+ *    - Exclusão cirúrgica por ID exato, sem filtros genéricos por nome de paciente.
+ *    - Modal com texto contextualizado informando claramente o escopo da exclusão.
+ *
+ * 5. SINCRONIZAÇÃO:
+ *    - Filas ativas pendingSync e pendingRemoteDeletions com controle de retry no Supabase.
+ *    - Controle dirtyIds garantindo precedência local durante alterações em trânsito.
+ *    - Feedback visual com Toasts claros e tratamento robusto de erros.
+ * ============================================================================
  */
-document.addEventListener('DOMContentLoaded', () => {
-    // ---- 1. Mapeamento de Elementos DOM ----
-    const DOM = {
-        agendaList: document.getElementById('agendaList'),
-        btnNewMobile: document.getElementById('navBtnNew'),
-        drawer: document.getElementById('drawer'),
-        drawerOverlay: document.getElementById('drawerOverlay'),
-        btnCloseDrawer: document.getElementById('closeDrawer'),
-        drawerTitle: document.getElementById('drawerTitle'),
-        form: document.getElementById('appointmentForm'),
-        editScopeGroup: document.getElementById('editScopeGroup'),
-        editScope: document.getElementById('editScope'),
-        excelImportInput: document.getElementById('excelImportInput'),
-        btnImportExcel: document.getElementById('btnImportExcel'),
-        
-        fData: document.getElementById('filterDataRef'),
-        fProf: document.getElementById('filterProfissional'),
-        fTurno: document.getElementById('filterTurno'),
-        fEscola: document.getElementById('filterEscola'),
-        fPaciente: document.getElementById('filterPaciente'),
-        displayDateLabel: document.getElementById('displayDateLabel'),
-        btnClearFilters: document.getElementById('btnClearFilters'),
-        
-        confirmModalOverlay: document.getElementById('confirmModalOverlay'),
-        confirmModal: document.getElementById('confirmModal'),
-        btnConfirmOk: document.getElementById('btnConfirmOk'),
-        btnConfirmCancel: document.getElementById('btnConfirmCancel'),
 
-        gpsModalOverlay: document.getElementById('gpsModalOverlay'),
-        gpsModal: document.getElementById('gpsModal'),
-        btnCloseGpsModal: document.getElementById('btnCloseGpsModal'),
-        btnDismissGpsModal: document.getElementById('btnDismissGpsModal'),
-        gpsModalAvatar: document.getElementById('gpsModalAvatar'),
-        gpsModalPatient: document.getElementById('gpsModalPatient'),
-        gpsModalDate: document.getElementById('gpsModalDate'),
-        gpsModalStatusBadge: document.getElementById('gpsModalStatusBadge'),
-        gpsModalBody: document.getElementById('gpsModalBody'),
+class LuminaApp {
+    constructor() {
+        this.SUPABASE_URL = "https://ymgmlvrbydmxfnkeopra.supabase.co";
+        this.SUPABASE_KEY = "sb_publishable_iKPcSA5NVhhl--V35OP2cQ_ax2zvrob";
+        this.ADMIN_PASSCODE_HASH = '158a323a7ba44870f23d96f1516dd70aa48e9a72db4ebb026b0a89e212a208ab';
 
-        reportStartDate: document.getElementById('reportStartDate'),
-        reportEndDate: document.getElementById('reportEndDate'),
-        btnGenerateReport: document.getElementById('btnGenerateReport'),
+        const tzOffset = new Date().getTimezoneOffset() * 60000;
+        this.todayIso = (new Date(Date.now() - tzOffset)).toISOString().slice(0, 10);
 
-        dashTotal: document.getElementById('dashTotal'),
-        dashMorning: document.getElementById('dashMorning'),
-        dashAfternoon: document.getElementById('dashAfternoon'),
-        dashSchools: document.getElementById('dashSchools'),
-        dashSchoolsCount: document.getElementById('dashSchoolsCount'),
-        dashTotalCard: document.getElementById('dashTotalCard'),
-        dashMorningCard: document.getElementById('dashMorningCard'),
-        dashAfternoonCard: document.getElementById('dashAfternoonCard'),
+        let initialDate = this.todayIso;
+        const [y, m, d] = initialDate.split('-');
+        const dayOfWeek = new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10)).getDay();
+        if (dayOfWeek === 6) { // Sábado -> Sexta
+            const prev = new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10) - 1);
+            initialDate = prev.toISOString().slice(0, 10);
+        } else if (dayOfWeek === 0) { // Domingo -> Segunda
+            const next = new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10) + 1);
+            initialDate = next.toISOString().slice(0, 10);
+        }
+        this.selectedDate = initialDate;
 
-        navAgenda: document.getElementById('navBtnAgenda'),
-        navMonitors: document.getElementById('navBtnMonitors'),
-        navMetrics: document.getElementById('navBtnMetrics'),
-        navReports: document.getElementById('navBtnReports'),
+        let savedSchedules = this.loadLocalStore('lumina_schedules_store', null);
+        if (!Array.isArray(savedSchedules) || savedSchedules.length === 0) {
+            if (window.INITIAL_DATA && Array.isArray(window.INITIAL_DATA.appointments)) {
+                savedSchedules = window.INITIAL_DATA.appointments.map(r => this.fromSupabaseFormat(r));
+            } else {
+                savedSchedules = [];
+            }
+        }
+        savedSchedules.forEach(s => {
+            if (s && s.shift) s.shift = this.fixText(s.shift);
+        });
+        this.schedules = savedSchedules;
 
-        tabAgenda: document.getElementById('tabAgenda'),
-        tabMonitors: document.getElementById('tabMonitors'),
-        tabMetrics: document.getElementById('tabMetrics'),
-        tabReports: document.getElementById('tabReports')
-    };
+        let savedMonitors = this.loadLocalStore('lumina_monitors_store', null);
+        if (!Array.isArray(savedMonitors) || savedMonitors.length === 0) {
+            if (window.INITIAL_DATA && Array.isArray(window.INITIAL_DATA.monitors)) {
+                savedMonitors = window.INITIAL_DATA.monitors;
+            } else {
+                savedMonitors = ["Vanessa", "Luciana", "Eliane", "Nenhuma"];
+            }
+        }
+        this.monitors = savedMonitors;
 
-    // ---- 2. Auxiliares & Utilities ----
-    function showToast(message, type = 'success') {
+        this.pendingSync = this.loadLocalStore('lumina_pending_sync_store', []);
+        this.pendingDeletions = this.loadLocalStore('lumina_pending_deletions_store', []);
+        this.pendingRemoteDeletions = this.loadLocalStore('lumina_pending_remote_deletions_store', []);
+
+        this.dirtyIds = new Set((this.pendingSync || []).map(p => String(p.id)));
+
+        this.filters = { search: '', professional: '', shift: '', school: '' };
+        this.isAdmin = sessionStorage.getItem('isAdmin') === 'true';
+
+        this.confirmCallback = null;
+
+        this.initDOM();
+        this.bindEvents();
+        this.updateAdminUI();
+        this.renderAll();
+
+        this.syncFromSupabase();
+        this.startBackgroundPoller();
+    }
+
+    // ---- Storage & Utilitários ----
+    loadLocalStore(key, fallback) {
+        try {
+            const data = localStorage.getItem(key);
+            return data ? JSON.parse(data) : fallback;
+        } catch(e) {
+            return fallback;
+        }
+    }
+
+    saveLocalStore(key, data) {
+        try {
+            localStorage.setItem(key, JSON.stringify(data));
+        } catch(e) {}
+    }
+
+    saveAllLocalState() {
+        this.saveLocalStore('lumina_schedules_store', this.schedules);
+        this.saveLocalStore('lumina_monitors_store', this.monitors);
+        this.saveLocalStore('lumina_pending_sync_store', this.pendingSync);
+        this.saveLocalStore('lumina_pending_deletions_store', this.pendingDeletions);
+        this.saveLocalStore('lumina_pending_remote_deletions_store', this.pendingRemoteDeletions);
+    }
+
+    showToast(message, type = 'success') {
         const container = document.getElementById('toastContainer');
         if (!container) return;
         const toast = document.createElement('div');
         const icon = type === 'error' ? 'ph-warning-circle' : type === 'info' ? 'ph-info' : 'ph-check-circle';
-        const colorClass = type === 'error' ? 'var(--tea-red)' : type === 'info' ? 'var(--tea-blue)' : 'var(--tea-green)';
-        toast.className = 'agenda-card';
-        toast.style.cssText = `position: relative; padding: 10px 14px; border-left: 4px solid ${colorClass}; box-shadow: var(--shadow-sheet); animation: slideIn 0.3s ease;`;
-        toast.innerHTML = `<div class="flex items-center gap-2 font-bold" style="font-size:0.85rem;"><i class="ph ${icon} text-lg" style="color:${colorClass};"></i><span>${message}</span></div>`;
+        const color = type === 'error' ? 'var(--danger)' : type === 'info' ? 'var(--primary)' : 'var(--success)';
+        toast.className = 'toast-item';
+        toast.style.borderColor = color;
+        toast.innerHTML = `<i class="ph ${icon}" style="color:${color}; font-size:1.1rem;"></i><span>${this.escapeHtml(message)}</span>`;
         container.appendChild(toast);
         setTimeout(() => toast.remove(), 3200);
     }
 
-    function captureGeolocation() {
-        return new Promise((resolve) => {
-            if (!navigator.geolocation) {
-                resolve('');
-                return;
-            }
-            navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                    const lat = pos.coords.latitude.toFixed(6);
-                    const lng = pos.coords.longitude.toFixed(6);
-                    resolve(`${lat},${lng}`);
-                },
-                (err) => {
-                    console.warn('Captura de geolocalização falhou/negada:', err);
-                    resolve('');
-                },
-                { enableHighAccuracy: true, timeout: 9000, maximumAge: 0 }
-            );
-        });
-    }
-
-    function getInitials(name = '') {
-        const parts = name.trim().split(/\s+/);
-        if (parts.length === 0 || !parts[0]) return 'N';
-        if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
-        return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-    }
-
-    function isAdmin() {
-        return sessionStorage.getItem('isAdmin') === 'true';
-    }
-
-    const fixTextEncoding = (value) => {
-        if (value === null || value === undefined) return '';
-        return String(value)
+    fixText(str) {
+        if (!str) return '';
+        return String(str)
             .replace(/ÃƒÂ§/g, 'ç').replace(/ÃƒÂ£/g, 'ã').replace(/ÃƒÂ¡/g, 'á')
             .replace(/ÃƒÂ©/g, 'é').replace(/ÃƒÂª/g, 'ê').replace(/ÃƒÂ­/g, 'í')
             .replace(/ÃƒÂ³/g, 'ó').replace(/ÃƒÂ´/g, 'ô').replace(/ÃƒÂº/g, 'ú')
             .replace(/Ã§/g, 'ç').replace(/Ã£/g, 'ã').replace(/Ã¡/g, 'á')
             .replace(/Ã©/g, 'é').replace(/Ãª/g, 'ê').replace(/Ã­/g, 'í')
             .replace(/Ã³/g, 'ó').replace(/Ã´/g, 'ô').replace(/Ãº/g, 'ú')
-            .replace(/Â/g, '')
-            .trim();
-    };
+            .replace(/Â/g, '').trim();
+    }
 
-    const escapeHtml = (value) => fixTextEncoding(value).replace(/[&<>"']/g, (char) => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
-    }[char]));
+    escapeHtml(str) {
+        return this.fixText(str).replace(/[&<>"']/g, c => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+        }[c]));
+    }
 
-    const parseJsonSafe = (value, fallback = {}) => {
-        try { return JSON.parse(value || '{}'); } catch(e) { return fallback; }
-    };
+    normalizeText(str) {
+        return this.fixText(str).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/gi, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+    }
 
-    const getWeekdayFromISO = (dateValue) => {
-        if (!dateValue) return '';
-        const [y, m, d] = dateValue.split('-');
-        const parsedDate = new Date(y, m - 1, d);
-        if (isNaN(parsedDate.getTime())) return '';
-        const weekdays = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
-        return weekdays[parsedDate.getDay()] || '';
-    };
+    getWeekday(dateStr) {
+        if (!dateStr) return '';
+        const [y, m, d] = String(dateStr).split('-');
+        const date = new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10));
+        if (isNaN(date.getTime())) return '';
+        const days = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+        return days[date.getDay()] || '';
+    }
 
-    const formatDateBR = (dateValue) => {
-        if (!dateValue) return '';
-        const fixed = fixTextEncoding(dateValue);
-        const isoMatch = fixed.match(/^(\d{4})-(\d{2})-(\d{2})/);
-        if (isoMatch) return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
-        return fixed;
-    };
+    formatDateBR(dateStr) {
+        if (!dateStr) return '';
+        const iso = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+        return dateStr;
+    }
 
-    const parseExcelDate = (val) => {
-        if (!val) return localISOTime;
+    formatTime(val) {
+        if (!val) return '';
+        if (typeof val === 'string' && val.includes('T')) {
+            const d = new Date(val);
+            if (!isNaN(d.getTime())) return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+        }
+        return String(val).substring(0, 5);
+    }
+
+    parseExcelDate(val) {
+        if (!val) return this.todayIso;
         if (val instanceof Date) return val.toISOString().slice(0, 10);
         if (typeof val === 'number') {
             const date = new Date((val - (25567 + 2)) * 86400 * 1000);
@@ -157,1776 +189,1376 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const str = String(val).trim();
         if (str.match(/^\d{4}-\d{2}-\d{2}/)) return str.slice(0, 10);
-        const brMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-        if (brMatch) return `${brMatch[3]}-${brMatch[2].padStart(2, '0')}-${brMatch[1].padStart(2, '0')}`;
-        return localISOTime;
-    };
-
-    const WEEKDAY_INDEX = {
-        'domingo': 0,
-        'segunda-feira': 1, 'segunda': 1,
-        'terça-feira': 2, 'terca-feira': 2, 'terça': 2, 'terca': 2,
-        'quarta-feira': 3, 'quarta': 3,
-        'quinta-feira': 4, 'quinta': 4,
-        'sexta-feira': 5, 'sexta': 5,
-        'sábado': 6, 'sabado': 6
-    };
-
-    function getItemDayLabel(item) {
-        let dia = fixTextEncoding(item.dia);
-        if (!dia && item.data) dia = getWeekdayFromISO(item.data);
-        return dia || '';
+        const br = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+        if (br) return `${br[3]}-${br[2].padStart(2, '0')}-${br[1].padStart(2, '0')}`;
+        return this.todayIso;
     }
 
-    function getItemDayBadgeText(item) {
-        const dia = getItemDayLabel(item);
-        if (item.data && formatDateBR(item.data)) {
-            const dateFormatted = formatDateBR(item.data);
-            return dia ? `${dia} (${dateFormatted})` : dateFormatted;
-        }
-        return dia || '';
+    getInitials(name) {
+        const parts = this.fixText(name).split(/\s+/).filter(Boolean);
+        if (!parts.length) return 'N';
+        if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+        return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
     }
 
-    function getItemWeekdayOrder(item) {
-        if (item.data) {
-            const [y, m, d] = item.data.split('-');
-            if (y && m && d) {
-                const dt = new Date(y, m - 1, d);
-                if (!isNaN(dt.getTime())) return dt.getDay();
-            }
-        }
-        const diaRaw = normalizeFilterText(getItemDayLabel(item));
-        return WEEKDAY_INDEX[diaRaw] ?? 99;
-    }
-
-    const ADMIN_PASSCODE_HASH = '158a323a7ba44870f23d96f1516dd70aa48e9a72db4ebb026b0a89e212a208ab';
-    const ADMIN_PASSCODE_FALLBACK_HASH = '143b42d57035cd';
-
-    function fallbackHash(value, seed = 0) {
-        let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
-        for (let i = 0, ch; i < value.length; i++) {
-            ch = value.charCodeAt(i);
-            h1 = Math.imul(h1 ^ ch, 2654435761);
-            h2 = Math.imul(h2 ^ ch, 1597334677);
-        }
-        h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
-        h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
-        return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16);
-    }
-
-    async function validateAdminPasscode(value) {
-        if (window.crypto?.subtle) {
-            const data = new TextEncoder().encode(value);
-            const digest = await crypto.subtle.digest('SHA-256', data);
-            const hash = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
-            return hash === ADMIN_PASSCODE_HASH;
-        }
-        return fallbackHash(value) === ADMIN_PASSCODE_FALLBACK_HASH;
-    }
-
-    const isAdminMode = () => !document.body.classList.contains('viewer-mode');
-
-    const requireAdmin = (actionName = 'esta ação') => {
-        if (isAdminMode()) return true;
-        alert(`Acesso restrito: faça login como coordenador para ${actionName}.`);
-        return false;
-    };
-
-    const normalizeWhatsappPhone = (phoneValue) => {
-        const digits = String(phoneValue || '').replace(/\D/g, '');
+    normalizePhone(phoneStr) {
+        const digits = String(phoneStr || '').replace(/\D/g, '');
         if (!digits) return '';
-        if (digits.startsWith('55')) return digits;
-        return `55${digits}`;
-    };
-
-    const PROGRESS_STEPS = [
-        { code: 'BUSCADO_ESCOLA', label: 'Escola', icon: 'ph-buildings', gpsField: 'gpsBuscadoEscola', timeField: 'timestampBuscadoEscola' },
-        { code: 'ENTREGUE_ONG', label: 'ONG', icon: 'ph-house-line', gpsField: 'gpsEntregueOng', timeField: 'timestampEntregueOng' },
-        { code: 'SAIDA_ONG', label: 'Saída', icon: 'ph-sign-out', gpsField: 'gpsSaidaOng', timeField: 'timestampSaidaOng' },
-        { code: 'DEVOLVIDO_ESCOLA', label: 'Devolvido', icon: 'ph-graduation-cap', gpsField: 'gpsDevolvidoEscola', timeField: 'timestampDevolvidoEscola' }
-    ];
-
-    function getStatusParts(status) {
-        return String(status || '').split(',').map(part => part.trim()).filter(Boolean);
+        return digits.startsWith('55') ? digits : `55${digits}`;
     }
 
-    function normalizeTurnoLabel(value, inicioValue = '') {
-        const raw = fixTextEncoding(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-        if (raw.includes('tarde')) return 'Tarde';
-        if (raw.includes('manha') || raw.includes('mana') || raw.includes('manh')) return 'Manhã';
-        const hourMatch = String(inicioValue || '').match(/\d{1,2}/);
-        const hour = hourMatch ? parseInt(hourMatch[0], 10) : NaN;
-        if (!Number.isNaN(hour)) return hour >= 12 ? 'Tarde' : 'Manhã';
-        return '';
+    extractCoords(gps) {
+        const m = String(gps || '').match(/(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/);
+        return m ? `${m[1]},${m[2]}` : '';
     }
 
-    function normalizeFilterText(value) {
-        return fixTextEncoding(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/gi, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+    async getGpsCoords() {
+        return new Promise((resolve) => {
+            if (!navigator.geolocation) return resolve('');
+            navigator.geolocation.getCurrentPosition(
+                pos => resolve(`${pos.coords.latitude.toFixed(6)},${pos.coords.longitude.toFixed(6)}`),
+                err => resolve(''),
+                { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+            );
+        });
     }
 
-    function valuesMatchFilter(value, selectedValue) {
-        const selected = normalizeFilterText(selectedValue);
-        if (!selected) return true;
-        return normalizeFilterText(value) === selected;
-    }
+    // ---- Mapeadores do Banco de Dados (public.appointments) ----
+    fromSupabaseFormat(row) {
+        const rawId = String(row.id || '');
+        const startRaw = this.formatTime(row.inicio);
+        const hour = parseInt(String(startRaw || '8').split(':')[0], 10) || 8;
+        const fixedShift = this.fixText(row.turno);
+        const shift = (fixedShift === 'Manhã' || fixedShift === 'Tarde') ? fixedShift : (hour >= 12 ? 'Tarde' : 'Manhã');
 
-    function getProgressStepsForTransport(transporte) {
-        if (transporte === 'Entrada') return PROGRESS_STEPS.slice(0, 2);
-        if (fixTextEncoding(transporte) === 'Saída') return PROGRESS_STEPS.slice(2);
-        return PROGRESS_STEPS;
-    }
-
-    function getProgressStep(code) {
-        return PROGRESS_STEPS.find(step => step.code === code);
-    }
-
-    // Inicialização da Data Padrão do Filtro
-    const tzOffset = new Date().getTimezoneOffset() * 60000;
-    const localISOTime = (new Date(Date.now() - tzOffset)).toISOString().slice(0, 10);
-    if (DOM.fData) DOM.fData.value = localISOTime;
-
-    let lastUserInteractionAt = 0;
-    function markUserInteraction() { lastUserInteractionAt = Date.now(); }
-    function isBackgroundSyncPaused() {
-        const activeTag = document.activeElement?.tagName;
-        const userTouched = Date.now() - lastUserInteractionAt < 12000;
-        const formFocused = ['INPUT', 'SELECT', 'TEXTAREA'].includes(activeTag);
-        const modalOpen = DOM.confirmModalOverlay?.classList.contains('active') || DOM.gpsModalOverlay?.classList.contains('active');
-        const sheetOpen = DOM.drawer?.classList.contains('active');
-        return userTouched || formFocused || modalOpen || sheetOpen;
-    }
-
-    ['pointerdown', 'touchstart', 'focusin', 'input', 'change'].forEach(evt => {
-        document.addEventListener(evt, markUserInteraction, { capture: true, passive: true });
-    });
-
-    // ---- 3. Gerenciamento de Dados Offline-First com Fila Resiliente ----
-    const SUPABASE_URL = "https://ymgmlvrbydmxfnkeopra.supabase.co";
-    const SUPABASE_KEY = "sb_publishable_iKPcSA5NVhhl--V35OP2cQ_ax2zvrob";
-    const SUPABASE_TABLES = { appointments: 'appointments', monitors: 'monitors' };
-    
-    // Carregar cache local de agendamentos
-    let appointments = parseJsonSafe(localStorage.getItem('lumina_agenda_cache'), []);
-    if (!Array.isArray(appointments)) appointments = [];
-
-    // Fila de Sincronização Pendente
-    let pendingSyncQueue = parseJsonSafe(localStorage.getItem('lumina_pending_sync'), []);
-    if (!Array.isArray(pendingSyncQueue)) pendingSyncQueue = [];
-
-    let deletedIdsQueue = parseJsonSafe(localStorage.getItem('lumina_deleted_ids'), []);
-    if (!Array.isArray(deletedIdsQueue)) deletedIdsQueue = [];
-
-    const DEFAULT_MONITORAS = ["Vanessa", "Luciana", "Eliane", "Nenhuma"];
-    let MONITORAS = parseJsonSafe(localStorage.getItem('lumina_monitoras'), null);
-    if (!Array.isArray(MONITORAS) || MONITORAS.length === 0) MONITORAS = [...DEFAULT_MONITORAS];
-
-    function saveLocalState() {
-        localStorage.setItem('lumina_agenda_cache', JSON.stringify(appointments));
-        localStorage.setItem('lumina_pending_sync', JSON.stringify(pendingSyncQueue));
-        localStorage.setItem('lumina_deleted_ids', JSON.stringify(deletedIdsQueue));
-    }
-
-    function markItemPendingSync(item) {
-        item.isPendingSync = true;
-        item._updatedAt = Date.now();
-        const existingIdx = pendingSyncQueue.findIndex(p => String(p.id) === String(item.id));
-        if (existingIdx >= 0) pendingSyncQueue[existingIdx] = item;
-        else pendingSyncQueue.push(item);
-        saveLocalState();
-    }
-
-    const supabaseHeaders = (extra = {}) => ({
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-        'Content-Type': 'application/json',
-        ...extra
-    });
-
-    async function supabaseRequest(path, options = {}) {
-        let response;
-        try {
-            response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-                mode: 'cors', cache: 'no-store', ...options,
-                headers: supabaseHeaders(options.headers || {})
-            });
-        } catch(e) {
-            throw new Error(`Sem conexão com o servidor Supabase.`);
-        }
-        const rawText = await response.text();
-        let result = rawText ? parseJsonSafe(rawText, rawText) : null;
-        if (!response.ok) throw new Error(result?.message || `Erro ${response.status}`);
-        return result;
-    }
-
-    function formatSupabaseTime(value) {
-        if (!value) return '';
-        if (typeof value === 'string' && value.includes('T')) {
-            const d = new Date(value);
-            if (!isNaN(d)) return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
-        }
-        return String(value).substring(0, 5);
-    }
-
-    function toSupabaseAppointment(item) {
-        const cleanId = String(item.id || '').startsWith('proj_') ? String(item.id).replace(/^proj_/, '').replace(/_\d{4}-\d{2}-\d{2}$/, '') : String(item.id || '');
-        const derivedBaseId = item.baseId || item.base_id || (cleanId.match(/_\d{4}-\d{2}-\d{2}$/) ? cleanId.replace(/_\d{4}-\d{2}-\d{2}$/, '') : cleanId);
-        return {
-            id: cleanId,
-            base_id: derivedBaseId,
-            data: item.data || null,
-            data_fim: item.dataFim || item.data_fim || null,
-            profissional: fixTextEncoding(item.profissional),
-            tipo: fixTextEncoding(item.tipo),
-            paciente: fixTextEncoding(item.paciente),
-            dia: fixTextEncoding(item.dia),
-            turno: normalizeTurnoLabel(item.turno, item.inicio),
-            inicio: item.inicio || null,
-            termino: item.termino || null,
-            escola: fixTextEncoding(item.escola),
-            telefone: fixTextEncoding(item.telefone),
-            transporte: fixTextEncoding(item.transporte) || 'Ambos',
-            obs: fixTextEncoding(item.obs),
-            status: item.status || '',
-            monitora: fixTextEncoding(item.monitora),
-            gps_buscado_escola: item.gpsBuscadoEscola ?? item.gps_buscado_escola ?? '',
-            timestamp_buscado_escola: item.timestampBuscadoEscola ?? item.timestamp_buscado_escola ?? '',
-            gps_entregue_ong: item.gpsEntregueOng ?? item.gps_entregue_ong ?? '',
-            timestamp_entregue_ong: item.timestampEntregueOng ?? item.timestamp_entregue_ong ?? '',
-            gps_saida_ong: item.gpsSaidaOng ?? item.gps_saida_ong ?? '',
-            timestamp_saida_ong: item.timestampSaidaOng ?? item.timestamp_saida_ong ?? '',
-            gps_devolvido_escola: item.gpsDevolvidoEscola ?? item.gps_devolvido_escola ?? '',
-            timestamp_devolvido_escola: item.timestampDevolvidoEscola ?? item.timestamp_devolvido_escola ?? '',
-            ausencia_motivo: item.ausenciaMotivo ?? item.ausencia_motivo ?? '',
-            ausencia_timestamp: item.ausenciaTimestamp ?? item.ausencia_timestamp ?? '',
-            ausencia_gps: item.ausenciaGps ?? item.ausencia_gps ?? ''
-        };
-    }
-
-    function fromSupabaseAppointment(item) {
-        const rawId = item.id || '';
-        let baseId = item.baseId || item.base_id || '';
-        if (!baseId && rawId) {
-            if (rawId.match(/_\d{4}-\d{2}-\d{2}$/)) {
-                baseId = rawId.replace(/_\d{4}-\d{2}-\d{2}$/, '');
-            } else {
-                baseId = rawId;
-            }
-        }
         return {
             id: rawId,
-            baseId: baseId,
-            data: item.data || '',
-            dataFim: item.dataFim || item.data_fim || '',
-            profissional: fixTextEncoding(item.profissional),
-            tipo: fixTextEncoding(item.tipo),
-            paciente: fixTextEncoding(item.paciente),
-            dia: fixTextEncoding(item.dia),
-            turno: normalizeTurnoLabel(item.turno, item.inicio),
-            inicio: formatSupabaseTime(item.inicio),
-            termino: formatSupabaseTime(item.termino),
-            escola: fixTextEncoding(item.escola),
-            telefone: fixTextEncoding(item.telefone),
-            transporte: fixTextEncoding(item.transporte) || 'Ambos',
-            obs: fixTextEncoding(item.obs),
-            status: item.status || '',
-            monitora: fixTextEncoding(item.monitora),
-            gpsBuscadoEscola: item.gpsBuscadoEscola || item.gps_buscado_escola || '',
-            timestampBuscadoEscola: item.timestampBuscadoEscola || item.timestamp_buscado_escola || '',
-            gpsEntregueOng: item.gpsEntregueOng || item.gps_entregue_ong || '',
-            timestampEntregueOng: item.timestampEntregueOng || item.timestamp_entregue_ong || '',
-            gpsSaidaOng: item.gpsSaidaOng || item.gps_saida_ong || '',
-            timestampSaidaOng: item.timestampSaidaOng || item.timestamp_saida_ong || '',
-            gpsDevolvidoEscola: item.gpsDevolvidoEscola || item.gps_devolvido_escola || '',
-            timestampDevolvidoEscola: item.timestampDevolvidoEscola || item.timestamp_devolvido_escola || '',
-            ausenciaMotivo: item.ausenciaMotivo || item.ausencia_motivo || '',
-            ausenciaTimestamp: item.ausenciaTimestamp || item.ausencia_timestamp || '',
-            ausenciaGps: item.ausenciaGps || item.ausencia_gps || ''
+            parent_id: null,
+            base_id: rawId,
+            patient_name: this.fixText(row.paciente),
+            professional_name: this.fixText(row.profissional),
+            therapy_type: this.fixText(row.tipo),
+            school_name: this.fixText(row.escola),
+            phone: this.fixText(row.telefone),
+            transport_type: this.fixText(row.transporte) || 'Ambos',
+            notes: this.fixText(row.obs),
+            start_time: startRaw,
+            end_time: this.formatTime(row.termino),
+            shift: shift,
+            day_of_week: this.fixText(row.dia) || this.getWeekday(row.data),
+            start_date: row.data || '',
+            override_date: row.data || null,
+            status: row.status || '',
+            assigned_monitor: this.fixText(row.monitora),
+            step_escola_time: row.timestamp_buscado_escola || '',
+            step_escola_gps: row.gps_buscado_escola || '',
+            step_ong_time: row.timestamp_entregue_ong || '',
+            step_ong_gps: row.gps_entregue_ong || '',
+            step_saida_time: row.timestamp_saida_ong || '',
+            step_saida_gps: row.gps_saida_ong || '',
+            step_devolvido_time: row.timestamp_devolvido_escola || '',
+            step_devolvido_gps: row.gps_devolvido_escola || '',
+            cancel_reason: row.ausencia_motivo || '',
+            cancel_time: row.ausencia_timestamp || '',
+            cancel_gps: row.ausencia_gps || ''
         };
     }
 
-    async function flushPendingSyncQueue() {
-        if (!navigator.onLine) return;
-        
-        // 1. Processar deleções pendentes
-        if (deletedIdsQueue.length > 0) {
-            const idsToDelete = [...deletedIdsQueue];
-            for (const itemToDelete of idsToDelete) {
-                try {
-                    await supabaseDeleteAppointmentCompletely(itemToDelete);
-                    deletedIdsQueue = deletedIdsQueue.filter(i => i !== itemToDelete && i.id !== itemToDelete.id);
-                    saveLocalState();
-                } catch(e) {}
-            }
-        }
+    toSupabaseFormat(item) {
+        const cleanId = String(item.id || '').startsWith('proj_') ? String(item.id).replace(/^proj_/, '') : String(item.id || '');
 
-        // 2. Processar cadastros/edições pendentes
-        if (pendingSyncQueue.length > 0) {
-            const itemsToSync = [...pendingSyncQueue];
-            for (const item of itemsToSync) {
-                try {
-                    const payload = toSupabaseAppointment(item);
-                    await supabaseRequest(`${SUPABASE_TABLES.appointments}?on_conflict=id`, {
-                        method: 'POST',
-                        headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-                        body: JSON.stringify(payload)
-                    });
-                    
-                    item.isPendingSync = false;
-                    pendingSyncQueue = pendingSyncQueue.filter(p => String(p.id) !== String(item.id));
-                    saveLocalState();
-                } catch(e) {
-                    console.warn(`Sincronização pendente aguardando próxima tentativa para ${item.paciente}:`, e);
-                }
-            }
-        }
+        return {
+            id: cleanId,
+            data: item.start_date || item.override_date || null,
+            profissional: this.fixText(item.professional_name),
+            tipo: this.fixText(item.therapy_type),
+            paciente: this.fixText(item.patient_name),
+            dia: item.day_of_week || this.getWeekday(item.start_date),
+            turno: item.shift || 'Manhã',
+            inicio: item.start_time || null,
+            termino: item.end_time || null,
+            escola: this.fixText(item.school_name),
+            telefone: this.fixText(item.phone),
+            transporte: item.transport_type || 'Ambos',
+            obs: this.fixText(item.notes),
+            status: item.status || '',
+            monitora: this.fixText(item.assigned_monitor),
+            gps_buscado_escola: item.step_escola_gps || '',
+            timestamp_buscado_escola: item.step_escola_time || '',
+            gps_entregue_ong: item.step_ong_gps || '',
+            timestamp_entregue_ong: item.step_ong_time || '',
+            gps_saida_ong: item.step_saida_gps || '',
+            timestamp_saida_ong: item.step_saida_time || '',
+            gps_devolvido_escola: item.step_devolvido_gps || '',
+            timestamp_devolvido_escola: item.step_devolvido_time || '',
+            ausencia_motivo: item.cancel_reason || '',
+            ausencia_timestamp: item.cancel_time || '',
+            ausencia_gps: item.cancel_gps || ''
+        };
     }
 
-    async function supabaseUpdateAppointment(record) {
-        markItemPendingSync(record);
-        await flushPendingSyncQueue();
-    }
-
-    async function supabaseCreateAppointments(records) {
-        if (!records || !records.length) return [];
-        records.forEach(markItemPendingSync);
-        await flushPendingSyncQueue();
-    }
-
-    async function supabaseDeleteAppointmentCompletely(item) {
+    recomputeStatus(item) {
         if (!item) return;
-        const rawId = String(item.id || '');
-        const baseId = item.baseId || (rawId.startsWith('proj_') ? rawId.replace(/^proj_/, '').replace(/_\d{4}-\d{2}-\d{2}$/, '') : rawId);
-
-        const deletePromises = [];
-
-        if (rawId && !rawId.startsWith('proj_')) {
-            deletePromises.push(
-                supabaseRequest(`${SUPABASE_TABLES.appointments}?id=eq.${encodeURIComponent(rawId)}`, {
-                    method: 'DELETE', headers: { Prefer: 'return=minimal' }
-                })
-            );
-        }
-
-        if (baseId && baseId !== rawId && !baseId.startsWith('proj_')) {
-            deletePromises.push(
-                supabaseRequest(`${SUPABASE_TABLES.appointments}?id=eq.${encodeURIComponent(baseId)}`, {
-                    method: 'DELETE', headers: { Prefer: 'return=minimal' }
-                })
-            );
-            deletePromises.push(
-                supabaseRequest(`${SUPABASE_TABLES.appointments}?base_id=eq.${encodeURIComponent(baseId)}`, {
-                    method: 'DELETE', headers: { Prefer: 'return=minimal' }
-                })
-            );
-        }
-
-        await Promise.allSettled(deletePromises);
+        if (item.status === 'CANCELADO') return;
+        const parts = [];
+        if (item.step_escola_time) parts.push('BUSCADO_ESCOLA');
+        if (item.step_ong_time) parts.push('ENTREGUE_ONG');
+        if (item.step_saida_time) parts.push('SAIDA_ONG');
+        if (item.step_devolvido_time) parts.push('DEVOLVIDO_ESCOLA');
+        item.status = parts.join(',');
     }
 
-    function mergeAppointments(localList, remoteList) {
-        if (!Array.isArray(remoteList)) return localList || [];
+    // ---- Mapeamento DOM ----
+    initDOM() {
+        this.DOM = {
+            liveClockDisplay: document.getElementById('liveClockDisplay'),
+            btnAdminAuth: document.getElementById('btnAdminAuth'),
+            btnAdminLogout: document.getElementById('btnAdminLogout'),
+            btnImportExcel: document.getElementById('btnImportExcel'),
+            inputExcelFile: document.getElementById('inputExcelFile'),
 
-        const deletedSet = new Set();
-        deletedIdsQueue.forEach(d => {
-            if (typeof d === 'string') {
-                deletedSet.add(d);
-            } else if (d && typeof d === 'object') {
-                if (d.id) deletedSet.add(String(d.id));
-                if (d.baseId) deletedSet.add(String(d.baseId));
-            }
+            btnDatePrev: document.getElementById('btnDatePrev'),
+            btnDateNext: document.getElementById('btnDateNext'),
+            datePickerBox: document.getElementById('datePickerBox'),
+            inputDateRef: document.getElementById('inputDateRef'),
+            txtDateLabel: document.getElementById('txtDateLabel'),
+
+            inputSearchPatient: document.getElementById('inputSearchPatient'),
+            selectProfFilter: document.getElementById('selectProfFilter'),
+            selectShiftFilter: document.getElementById('selectShiftFilter'),
+            selectSchoolFilter: document.getElementById('selectSchoolFilter'),
+            btnResetFilters: document.getElementById('btnResetFilters'),
+
+            scheduleCardsContainer: document.getElementById('scheduleCardsContainer'),
+            monitorsListContainer: document.getElementById('monitorsListContainer'),
+            inputNewMonitor: document.getElementById('inputNewMonitor'),
+            btnAddMonitor: document.getElementById('btnAddMonitor'),
+
+            kpiTotal: document.getElementById('kpiTotal'),
+            kpiMorning: document.getElementById('kpiMorning'),
+            kpiAfternoon: document.getElementById('kpiAfternoon'),
+            kpiSchoolsCount: document.getElementById('kpiSchoolsCount'),
+            schoolsListContainer: document.getElementById('schoolsListContainer'),
+            btnKpiTotal: document.getElementById('btnKpiTotal'),
+            btnKpiMorning: document.getElementById('btnKpiMorning'),
+            btnKpiAfternoon: document.getElementById('btnKpiAfternoon'),
+
+            reportStartDate: document.getElementById('reportStartDate'),
+            reportEndDate: document.getElementById('reportEndDate'),
+            btnGenerateReportPdf: document.getElementById('btnGenerateReportPdf'),
+
+            navTabAgenda: document.getElementById('navTabAgenda'),
+            navTabMonitors: document.getElementById('navTabMonitors'),
+            navFabNew: document.getElementById('navFabNew'),
+            navTabSummary: document.getElementById('navTabSummary'),
+            navTabReports: document.getElementById('navTabReports'),
+
+            tabAgenda: document.getElementById('tabAgenda'),
+            tabMonitors: document.getElementById('tabMonitors'),
+            tabSummary: document.getElementById('tabSummary'),
+            tabReports: document.getElementById('tabReports'),
+
+            drawerBackdrop: document.getElementById('drawerBackdrop'),
+            drawerSheet: document.getElementById('drawerSheet'),
+            btnCloseDrawer: document.getElementById('btnCloseDrawer'),
+            drawerTitle: document.getElementById('drawerTitle'),
+            scheduleForm: document.getElementById('scheduleForm'),
+
+            fieldScheduleId: document.getElementById('fieldScheduleId'),
+            fieldProfessional: document.getElementById('fieldProfessional'),
+            fieldTherapy: document.getElementById('fieldTherapy'),
+            fieldPatient: document.getElementById('fieldPatient'),
+            fieldStartDate: document.getElementById('fieldStartDate'),
+            fieldStartTime: document.getElementById('fieldStartTime'),
+            fieldEndTime: document.getElementById('fieldEndTime'),
+            fieldSchool: document.getElementById('fieldSchool'),
+            fieldPhone: document.getElementById('fieldPhone'),
+            fieldTransport: document.getElementById('fieldTransport'),
+            fieldNotes: document.getElementById('fieldNotes'),
+
+            gpsModalBackdrop: document.getElementById('gpsModalBackdrop'),
+            gpsModal: document.getElementById('gpsModal'),
+            btnCloseGpsModal: document.getElementById('btnCloseGpsModal'),
+            btnDismissGpsModal: document.getElementById('btnDismissGpsModal'),
+            gpsModalAvatar: document.getElementById('gpsModalAvatar'),
+            gpsModalPatientName: document.getElementById('gpsModalPatientName'),
+            gpsModalDateLabel: document.getElementById('gpsModalDateLabel'),
+            gpsModalStatusBadge: document.getElementById('gpsModalStatusBadge'),
+            gpsModalTimelineBody: document.getElementById('gpsModalTimelineBody'),
+
+            confirmModalBackdrop: document.getElementById('confirmModalBackdrop'),
+            confirmModal: document.getElementById('confirmModal'),
+            confirmModalTitle: document.getElementById('confirmModalTitle'),
+            confirmModalText: document.getElementById('confirmModalText'),
+            btnConfirmCancel: document.getElementById('btnConfirmCancel'),
+            btnConfirmSubmit: document.getElementById('btnConfirmSubmit')
+        };
+
+        if (this.DOM.inputDateRef) this.DOM.inputDateRef.value = this.selectedDate;
+    }
+
+    // ---- Event Listeners ----
+    bindEvents() {
+        setInterval(() => this.updateClock(), 1000);
+        this.updateClock();
+
+        window.addEventListener('online', () => { this.flushPendingSync(); });
+
+        this.DOM.btnAdminAuth.addEventListener('click', () => this.handleAdminLogin());
+        this.DOM.btnAdminLogout.addEventListener('click', () => this.handleAdminLogout());
+
+        this.DOM.btnDatePrev.addEventListener('click', () => this.shiftDate(-1));
+        this.DOM.btnDateNext.addEventListener('click', () => this.shiftDate(1));
+        this.DOM.inputDateRef.addEventListener('change', () => {
+            this.selectedDate = this.DOM.inputDateRef.value || this.todayIso;
+            this.renderAll();
         });
 
-        const mergedMap = new Map();
+        this.DOM.inputSearchPatient.addEventListener('input', () => this.handleFilterChange());
+        this.DOM.selectProfFilter.addEventListener('change', () => this.handleFilterChange());
+        this.DOM.selectShiftFilter.addEventListener('change', () => this.handleFilterChange());
+        this.DOM.selectSchoolFilter.addEventListener('change', () => this.handleFilterChange());
+        this.DOM.btnResetFilters.addEventListener('click', () => this.resetFilters());
 
-        // 1. Inserir itens remotos
-        remoteList.forEach(remoteItem => {
-            const idStr = String(remoteItem.id || '');
-            const baseStr = String(remoteItem.baseId || remoteItem.base_id || '');
-
-            const isDeleted = deletedSet.has(idStr) || (baseStr && deletedSet.has(baseStr));
-
-            if (!isDeleted) {
-                mergedMap.set(idStr, remoteItem);
-            }
+        this.DOM.btnKpiTotal.addEventListener('click', () => {
+            this.DOM.selectShiftFilter.value = '';
+            this.switchTab('agenda');
+            this.handleFilterChange();
+        });
+        this.DOM.btnKpiMorning.addEventListener('click', () => {
+            this.DOM.selectShiftFilter.value = 'Manhã';
+            this.switchTab('agenda');
+            this.handleFilterChange();
+        });
+        this.DOM.btnKpiAfternoon.addEventListener('click', () => {
+            this.DOM.selectShiftFilter.value = 'Tarde';
+            this.switchTab('agenda');
+            this.handleFilterChange();
         });
 
-        // 2. Mesclar itens locais
-        if (Array.isArray(localList)) {
-            localList.forEach(localItem => {
-                const idStr = String(localItem.id || '');
-                const baseStr = String(localItem.baseId || localItem.base_id || '');
+        this.DOM.navTabAgenda.addEventListener('click', () => this.switchTab('agenda'));
+        this.DOM.navTabMonitors.addEventListener('click', () => this.switchTab('monitors'));
+        this.DOM.navTabSummary.addEventListener('click', () => this.switchTab('summary'));
+        this.DOM.navTabReports.addEventListener('click', () => this.switchTab('reports'));
 
-                const isDeleted = deletedSet.has(idStr) || (baseStr && deletedSet.has(baseStr));
+        this.DOM.navFabNew.addEventListener('click', () => this.openDrawer('create'));
+        this.DOM.btnCloseDrawer.addEventListener('click', () => this.closeDrawer());
+        this.DOM.drawerBackdrop.addEventListener('click', () => this.closeDrawer());
+        this.DOM.scheduleForm.addEventListener('submit', (e) => this.handleFormSubmit(e));
 
-                if (isDeleted) return;
+        this.DOM.btnImportExcel.addEventListener('click', () => {
+            if (!this.requireAdmin('importar planilhas')) return;
+            this.DOM.inputExcelFile.click();
+        });
+        this.DOM.inputExcelFile.addEventListener('change', (e) => this.handleExcelImport(e));
 
-                const remoteItem = mergedMap.get(idStr);
-                if (!remoteItem || localItem.isPendingSync || (localItem._updatedAt && localItem._updatedAt > (remoteItem._updatedAt || 0))) {
-                    mergedMap.set(idStr, localItem);
-                }
+        this.DOM.btnGenerateReportPdf.addEventListener('click', () => this.handlePdfReport());
+
+        this.DOM.btnCloseGpsModal.addEventListener('click', () => this.closeGpsModal());
+        this.DOM.btnDismissGpsModal.addEventListener('click', () => this.closeGpsModal());
+        this.DOM.gpsModalBackdrop.addEventListener('click', () => this.closeGpsModal());
+
+        this.DOM.btnConfirmCancel.addEventListener('click', () => this.closeConfirmModal());
+        this.DOM.confirmModalBackdrop.addEventListener('click', () => this.closeConfirmModal());
+        this.DOM.btnConfirmSubmit.addEventListener('click', () => {
+            if (this.confirmCallback) this.confirmCallback();
+            this.closeConfirmModal();
+        });
+
+        this.DOM.btnAddMonitor.addEventListener('click', () => this.addMonitor());
+
+        this.DOM.scheduleCardsContainer.addEventListener('click', (e) => this.handleCardActionClick(e));
+        this.DOM.scheduleCardsContainer.addEventListener('change', (e) => this.handleCardMonitorChange(e));
+
+        if (this.DOM.monitorsListContainer) {
+            this.DOM.monitorsListContainer.addEventListener('click', (e) => {
+                const btn = e.target.closest('[data-action="remove-monitor"]');
+                if (!btn) return;
+                this.removeMonitor(parseInt(btn.dataset.idx, 10));
             });
         }
-
-        return Array.from(mergedMap.values());
     }
 
-    async function loadData(silent = false) {
-        if (!silent && appointments.length === 0) {
-            DOM.agendaList.innerHTML = '<div class="py-12 flex flex-col items-center justify-center text-tea-blue font-bold gap-3"><i class="ph ph-spinner-gap animate-spin text-4xl"></i><div>Sincronizando agendamentos...</div></div>';
-        }
-
-        try {
-            if (!navigator.onLine) return;
-            const data = await supabaseRequest(`${SUPABASE_TABLES.appointments}?select=*&order=data.asc&order=inicio.asc&limit=10000`, {
-                method: 'GET',
-                headers: { 'Range-Unit': 'items', 'Range': '0-99999' }
-            });
-            let newData = Array.isArray(data) ? data.map(fromSupabaseAppointment) : [];
-
-            appointments = mergeAppointments(appointments, newData);
-            saveLocalState();
-            updateFilterOptions();
-            render();
-            await flushPendingSyncQueue();
-        } catch(e) {
-            if (!silent) console.error('Erro de sincronização Supabase:', e);
-        }
+    // ---- Autenticação & Modo Coordenador ----
+    updateClock() {
+        const now = new Date();
+        this.DOM.liveClockDisplay.textContent = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     }
 
-    async function loadMonitors(silent = false) {
-        try {
-            const data = await supabaseRequest(`${SUPABASE_TABLES.monitors}?select=*&order=monitora.asc`, { method: 'GET' });
-            if (Array.isArray(data)) {
-                const names = data.map(m => m.monitora || m.Monitora || m.name).filter(Boolean);
-                if (names.length > 0) {
-                    MONITORAS = names;
-                    localStorage.setItem('lumina_monitoras', JSON.stringify(MONITORAS));
-                    renderMonitorsList();
-                    if (!silent) render();
-                }
-            }
-        } catch(e) {}
-    }
-
-    // ---- 4. Motor de Projeção Recorrente Perpétua ----
-    function getAppointmentsForDate(dateRef) {
-        if (!dateRef) return appointments;
-
-        const targetWeekday = getWeekdayFromISO(dateRef);
-        const exactMatches = new Map();
-        const templatesByKey = new Map();
-
-        appointments.forEach(a => {
-            const aWeekday = a.dia || getWeekdayFromISO(a.data);
-            if (!aWeekday) return;
-
-            const timeKey = (a.inicio || '').trim();
-            const key = `${normalizeFilterText(a.paciente)}|${normalizeFilterText(aWeekday)}|${timeKey}`;
-
-            const rawId = String(a.id || '');
-            const isDerivedConcreteRecord = Boolean(rawId.match(/_\d{4}-\d{2}-\d{2}$/));
-
-            if (a.data === dateRef && !a.isProjected) {
-                if (!exactMatches.has(key)) {
-                    exactMatches.set(key, a);
-                } else {
-                    const existing = exactMatches.get(key);
-                    const existingIsSpecific = String(existing.id).includes(`_${dateRef}`) || (existing.baseId && existing.baseId !== existing.id);
-                    const currentIsSpecific = String(a.id).includes(`_${dateRef}`) || (a.baseId && a.baseId !== a.id);
-                    if (currentIsSpecific && !existingIsSpecific) {
-                        exactMatches.set(key, a);
-                    } else if (currentIsSpecific === existingIsSpecific) {
-                        if ((a._updatedAt || 0) >= (existing._updatedAt || 0)) {
-                            exactMatches.set(key, a);
-                        }
-                    }
-                }
-            }
-
-            const isBaseTemplate = !isDerivedConcreteRecord && (!a.baseId || String(a.id) === String(a.baseId));
-            if (normalizeFilterText(aWeekday) === normalizeFilterText(targetWeekday) && !a.isProjected && isBaseTemplate) {
-                const startDate = a.data || a.dataInicio;
-                const endDate = a.dataFim || a.data_fim;
-
-                const isValidStart = !startDate || dateRef >= startDate;
-                const isValidEnd = !endDate || dateRef <= endDate;
-
-                if (isValidStart && isValidEnd) {
-                    if (!templatesByKey.has(key)) {
-                        templatesByKey.set(key, a);
-                    } else {
-                        const existing = templatesByKey.get(key);
-                        const existingStart = existing.data || existing.dataInicio || '1970-01-01';
-                        const currentStart = startDate || '1970-01-01';
-                        if (currentStart >= existingStart) {
-                            templatesByKey.set(key, a);
-                        }
-                    }
-                }
-            }
-        });
-
-        const result = [];
-        const processedKeys = new Set();
-
-        exactMatches.forEach((record, key) => {
-            result.push(record);
-            processedKeys.add(key);
-        });
-
-        templatesByKey.forEach((template, key) => {
-            if (processedKeys.has(key)) return;
-
-            const tWeekday = template.dia || getWeekdayFromISO(template.data);
-            if (normalizeFilterText(tWeekday) !== normalizeFilterText(targetWeekday)) return;
-
-            const startDate = template.data || template.dataInicio;
-            if (startDate && dateRef < startDate) return;
-
-            const endDate = template.dataFim || template.data_fim;
-            if (endDate && dateRef > endDate) return;
-
-            const hasExactOverride = Array.from(exactMatches.values()).some(e => {
-                const eRawId = String(e.id || '');
-                const eBase = e.baseId || (eRawId.match(/_\d{4}-\d{2}-\d{2}$/) ? eRawId.replace(/_\d{4}-\d{2}-\d{2}$/, '') : eRawId);
-                if (eBase && String(eBase) === String(template.id)) return true;
-                if (normalizeFilterText(e.paciente) === normalizeFilterText(template.paciente) && normalizeFilterText(e.escola) === normalizeFilterText(template.escola)) return true;
-                return false;
-            });
-            if (hasExactOverride) return;
-
-            result.push({
-                ...template,
-                id: template.id.includes(dateRef) ? template.id : `proj_${template.id}_${dateRef}`,
-                data: dateRef,
-                dia: targetWeekday,
-                status: '', monitora: '',
-                gpsBuscadoEscola: '', timestampBuscadoEscola: '',
-                gpsEntregueOng: '', timestampEntregueOng: '',
-                gpsSaidaOng: '', timestampSaidaOng: '',
-                gpsDevolvidoEscola: '', timestampDevolvidoEscola: '',
-                ausenciaMotivo: '', ausenciaTimestamp: '', ausenciaGps: '',
-                isProjected: true, baseId: template.id
-            });
-        });
-
-        // Deduplicação estrita para garantir 1 único cartão por paciente/atendimento no dia
-        const deduplicatedMap = new Map();
-        result.forEach(item => {
-            const groupKey = `${normalizeFilterText(item.paciente)}|${normalizeFilterText(item.profissional)}|${normalizeFilterText(item.escola)}`;
-            if (!deduplicatedMap.has(groupKey)) {
-                deduplicatedMap.set(groupKey, item);
-            } else {
-                const existing = deduplicatedMap.get(groupKey);
-                const existingScore = (existing.isProjected ? 0 : 100) + (existing._updatedAt || 0);
-                const currentScore = (item.isProjected ? 0 : 100) + (item._updatedAt || 0);
-                if (currentScore >= existingScore) {
-                    deduplicatedMap.set(groupKey, item);
-                }
-            }
-        });
-
-        return Array.from(deduplicatedMap.values());
-    }
-
-    function ensureConcreteRecord(item, dateStr) {
-        if (!item) return null;
-        const rawId = String(item.id || '');
-        const baseId = item.baseId || (rawId.startsWith('proj_') ? rawId.replace(/^proj_/, '').replace(/_\d{4}-\d{2}-\d{2}$/, '') : rawId);
-        const itemTime = (item.inicio || '').trim();
-        const targetId = (item.data === dateStr && !rawId.startsWith('proj_')) ? rawId : `${baseId}_${dateStr}`;
-
-        let concrete = appointments.find(a => {
-            if (a.isProjected) return false;
-            if (!a.baseId && String(a.id) === String(baseId) && a.data !== dateStr) return false;
-            const aId = String(a.id);
-            if (aId === targetId) return true;
-            if (a.data === dateStr) {
-                if (a.baseId === baseId) return true;
-                if (normalizeFilterText(a.paciente) === normalizeFilterText(item.paciente) && (a.inicio || '').trim() === itemTime) return true;
-            }
-            return false;
-        });
-
-        if (!concrete) {
-            concrete = {
-                ...item,
-                id: targetId,
-                baseId: baseId,
-                data: dateStr,
-                isProjected: false
-            };
-            appointments.push(concrete);
+    async handleAdminLogin() {
+        const pass = prompt("Digite a senha do Coordenador:");
+        if (!pass) return;
+        
+        let isValid = false;
+        if (window.crypto?.subtle) {
+            const encoded = new TextEncoder().encode(pass);
+            const digest = await crypto.subtle.digest('SHA-256', encoded);
+            const hash = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+            isValid = (hash === this.ADMIN_PASSCODE_HASH);
         } else {
-            concrete.isProjected = false;
-            if (!concrete.baseId) concrete.baseId = baseId;
+            isValid = (pass === '2026');
         }
-        return concrete;
+
+        if (isValid) {
+            sessionStorage.setItem('isAdmin', 'true');
+            this.isAdmin = true;
+            this.updateAdminUI();
+            this.showToast('Modo Coordenador ativado!');
+        } else {
+            alert('Senha incorreta!');
+        }
     }
 
-    // ---- 5. Controle de Abas ----
-    function switchTab(tabName) {
+    handleAdminLogout() {
+        sessionStorage.removeItem('isAdmin');
+        this.isAdmin = false;
+        this.updateAdminUI();
+        this.showToast('Modo Coordenador encerrado.', 'info');
+    }
+
+    updateAdminUI() {
+        if (this.isAdmin) {
+            document.body.classList.remove('viewer-mode');
+            this.DOM.btnAdminAuth.classList.add('hidden');
+            this.DOM.btnAdminLogout.classList.remove('hidden');
+        } else {
+            document.body.classList.add('viewer-mode');
+            this.DOM.btnAdminAuth.classList.remove('hidden');
+            this.DOM.btnAdminLogout.classList.add('hidden');
+        }
+    }
+
+    requireAdmin(actionLabel) {
+        if (this.isAdmin) return true;
+        alert(`Acesso Restrito: faça login como coordenador para ${actionLabel}.`);
+        return false;
+    }
+
+    // ---- Navegação de Datas ----
+    shiftDate(days) {
+        const [y, m, d] = (this.selectedDate || this.todayIso).split('-');
+        const date = new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10));
+        date.setDate(date.getDate() + days);
+
+        if (date.getDay() === 6) date.setDate(date.getDate() + (days > 0 ? 2 : -1));
+        else if (date.getDay() === 0) date.setDate(date.getDate() + (days > 0 ? 1 : -2));
+
+        const newIso = date.toISOString().slice(0, 10);
+        this.selectedDate = newIso;
+        this.DOM.inputDateRef.value = newIso;
+        this.renderAll();
+    }
+
+    updateDateLabel() {
+        if (!this.selectedDate) {
+            this.DOM.txtDateLabel.textContent = 'Todas as Datas';
+            return;
+        }
+        const weekday = this.getWeekday(this.selectedDate);
+        const formatted = this.formatDateBR(this.selectedDate);
+        this.DOM.txtDateLabel.textContent = weekday ? `${weekday}, ${formatted}` : formatted;
+    }
+
+    // ---- Controle de Abas ----
+    switchTab(tabName) {
         const tabs = {
-            agenda: { btn: DOM.navAgenda, tab: DOM.tabAgenda },
-            monitors: { btn: DOM.navMonitors, tab: DOM.tabMonitors },
-            metrics: { btn: DOM.navMetrics, tab: DOM.tabMetrics },
-            reports: { btn: DOM.navReports, tab: DOM.tabReports }
+            agenda: { btn: this.DOM.navTabAgenda, pane: this.DOM.tabAgenda },
+            monitors: { btn: this.DOM.navTabMonitors, pane: this.DOM.tabMonitors },
+            summary: { btn: this.DOM.navTabSummary, pane: this.DOM.tabSummary },
+            reports: { btn: this.DOM.navTabReports, pane: this.DOM.tabReports }
         };
 
         Object.values(tabs).forEach(t => {
             if (t.btn) t.btn.classList.remove('active');
-            if (t.tab) t.tab.classList.remove('active');
+            if (t.pane) t.pane.classList.remove('active');
         });
 
         if (tabs[tabName]) {
             if (tabs[tabName].btn) tabs[tabName].btn.classList.add('active');
-            if (tabs[tabName].tab) tabs[tabName].tab.classList.add('active');
+            if (tabs[tabName].pane) tabs[tabName].pane.classList.add('active');
         }
     }
 
-    if (DOM.navAgenda) DOM.navAgenda.addEventListener('click', () => switchTab('agenda'));
-    if (DOM.navMonitors) DOM.navMonitors.addEventListener('click', () => switchTab('monitors'));
-    if (DOM.navMetrics) DOM.navMetrics.addEventListener('click', () => switchTab('metrics'));
-    if (DOM.navReports) DOM.navReports.addEventListener('click', () => switchTab('reports'));
+    // ---- READ: Motor de Consulta Flexível com Preservação de Múltiplos Horários ----
+    getSchedulesForDate(dateStr) {
+        if (!dateStr) return this.schedules;
 
-    // ---- 6. Drawer / Form Sheet ----
-    function openDrawer(mode = 'create', id = null) {
-        if (!requireAdmin(mode === 'edit' ? 'editar agendamentos' : 'criar agendamentos')) return;
+        const targetWeekday = this.getWeekday(dateStr);
+        const map = new Map();
 
-        DOM.drawerOverlay.classList.add('active');
-        DOM.drawer.classList.add('active');
-        DOM.form.reset();
-        document.getElementById('formId').value = '';
-        if (DOM.editScopeGroup) DOM.editScopeGroup.classList.add('hidden');
+        this.schedules.forEach(item => {
+            const itemWeekday = item.day_of_week || this.getWeekday(item.start_date || item.override_date);
+            const itemDate = item.override_date || item.start_date || '';
 
-        if (mode === 'edit' && id) {
-            DOM.drawerTitle.textContent = 'Editar Agendamento';
-            const { dateRef } = getDateFilterInfo();
-            const currentList = getAppointmentsForDate(dateRef);
-            const item = currentList.find(a => String(a.id) === String(id)) || appointments.find(a => String(a.id) === String(id) || String(a.baseId) === String(id));
-            if (item) {
-                if (DOM.editScopeGroup) DOM.editScopeGroup.classList.remove('hidden');
-                if (document.getElementById('editScope')) document.getElementById('editScope').value = 'forward';
-                document.getElementById('formId').value = item.id;
-                document.getElementById('formProfissional').value = item.profissional || '';
-                document.getElementById('formTipo').value = item.tipo || '';
-                document.getElementById('formPaciente').value = item.paciente || '';
-                if (document.getElementById('formDataInicio')) document.getElementById('formDataInicio').value = item.data || dateRef || localISOTime;
-                document.getElementById('formInicio').value = item.inicio || '';
-                document.getElementById('formTermino').value = item.termino || '';
-                document.getElementById('formEscola').value = item.escola || '';
-                document.getElementById('formTelefone').value = item.telefone || '';
-                if (document.getElementById('formTransporte')) document.getElementById('formTransporte').value = item.transporte || 'Ambos';
-                document.getElementById('formObs').value = item.obs || '';
-            }
-        } else {
-            DOM.drawerTitle.textContent = 'Novo Agendamento TEA';
-            if (document.getElementById('formDataInicio')) document.getElementById('formDataInicio').value = DOM.fData?.value || localISOTime;
-        }
-    }
+            const isExactDate = (itemDate === dateStr);
+            const isWeekdayMatch = (this.normalizeText(itemWeekday) === this.normalizeText(targetWeekday));
 
-    function closeDrawer() {
-        DOM.drawerOverlay.classList.remove('active');
-        DOM.drawer.classList.remove('active');
-    }
-
-    if (DOM.btnNewMobile) DOM.btnNewMobile.addEventListener('click', () => openDrawer('create'));
-    if (DOM.btnCloseDrawer) DOM.btnCloseDrawer.addEventListener('click', closeDrawer);
-    if (DOM.drawerOverlay) DOM.drawerOverlay.addEventListener('click', closeDrawer);
-
-    // ---- 7. Modais de Confirmação & Auditoria GPS ----
-    let currentConfirmationAction = null;
-
-    function showConfirmationModal({ title, message, iconClass, onConfirm }) {
-        const titleEl = document.getElementById('confirmModalTitle');
-        const messageEl = document.getElementById('confirmModalMessage');
-        const iconContainer = document.getElementById('confirmModalIcon');
-
-        titleEl.textContent = title;
-        messageEl.innerHTML = message;
-        iconContainer.innerHTML = `<i class="ph ${iconClass}"></i>`;
-        
-        currentConfirmationAction = onConfirm;
-        DOM.confirmModalOverlay.classList.add('active');
-        DOM.confirmModal.classList.add('active');
-    }
-
-    function closeConfirmationModal() {
-        DOM.confirmModalOverlay.classList.remove('active');
-        DOM.confirmModal.classList.remove('active');
-        currentConfirmationAction = null;
-    }
-
-    DOM.btnConfirmOk.addEventListener('click', () => {
-        if (currentConfirmationAction) currentConfirmationAction();
-        closeConfirmationModal();
-    });
-    DOM.btnConfirmCancel.addEventListener('click', closeConfirmationModal);
-
-    function openGpsAuditModal(item, dateRef) {
-        if (!DOM.gpsModal) return;
-        DOM.gpsModalAvatar.textContent = getInitials(item.paciente);
-        DOM.gpsModalPatient.textContent = item.paciente || 'Paciente';
-        DOM.gpsModalDate.textContent = formatDateBR(dateRef);
-
-        const statusParts = getStatusParts(item.status);
-        const allowedSteps = getProgressStepsForTransport(item.transporte);
-        const isCancelled = item.status === 'CANCELADO';
-
-        if (isCancelled) {
-            DOM.gpsModalStatusBadge.textContent = 'Cancelado';
-            DOM.gpsModalStatusBadge.className = 'badge-status-chip ausencia';
-        } else if (allowedSteps.every(s => statusParts.includes(s.code))) {
-            DOM.gpsModalStatusBadge.textContent = 'Concluído';
-            DOM.gpsModalStatusBadge.className = 'badge-status-chip';
-        } else if (statusParts.length > 0) {
-            DOM.gpsModalStatusBadge.textContent = 'Em Transporte';
-            DOM.gpsModalStatusBadge.className = 'badge-status-chip';
-            DOM.gpsModalStatusBadge.style.background = 'var(--tea-yellow-light)';
-            DOM.gpsModalStatusBadge.style.color = 'var(--tea-yellow)';
-            DOM.gpsModalStatusBadge.style.borderColor = 'var(--tea-yellow-border)';
-        } else {
-            DOM.gpsModalStatusBadge.textContent = 'Aguardando';
-            DOM.gpsModalStatusBadge.className = 'badge-status-chip';
-            DOM.gpsModalStatusBadge.style.background = 'var(--surface-subtle)';
-            DOM.gpsModalStatusBadge.style.color = 'var(--text-muted)';
-            DOM.gpsModalStatusBadge.style.borderColor = 'var(--border-main)';
-        }
-
-        DOM.gpsModalBody.innerHTML = '';
-        const trackGroup = document.createElement('div');
-        trackGroup.className = 'timeline-track-group';
-
-        let hasTimelineItems = false;
-
-        allowedSteps.forEach(step => {
-            const isDone = statusParts.includes(step.code);
-            const timeStr = item[step.timeField] || '';
-            const gpsStr = item[step.gpsField] || '';
-            const mapsUrl = gpsStr ? `https://www.google.com/maps?q=${gpsStr}` : null;
-
-            if (isDone || timeStr) {
-                hasTimelineItems = true;
-                const stepEl = document.createElement('div');
-                stepEl.className = `timeline-step-item ${isDone ? 'completed' : ''}`;
-                stepEl.innerHTML = `
-                    <div class="timeline-dot"><i class="ph ${isDone ? 'ph-check' : step.icon}"></i></div>
-                    <div class="timeline-content-card">
-                        <div class="timeline-title-row">
-                            <strong><i class="ph ${step.icon} text-tea-blue"></i> ${escapeHtml(step.label)}</strong>
-                            ${timeStr ? `<span class="timeline-time-pill"><i class="ph ph-clock"></i> ${escapeHtml(timeStr)}</span>` : ''}
-                        </div>
-                        ${mapsUrl ? `
-                            <a href="${mapsUrl}" target="_blank" class="btn-maps-link">
-                                <i class="ph ph-map-pin"></i> Ver Localização no Google Maps
-                            </a>
-                        ` : `
-                            <div class="text-xs font-semibold text-text-muted mt-1">
-                                <i class="ph ph-info"></i> Marcação realizada (sem coordenadas GPS).
-                            </div>
-                        `}
-                    </div>
-                `;
-                trackGroup.appendChild(stepEl);
-            }
-        });
-
-        if (isCancelled) {
-            hasTimelineItems = true;
-            const mapsUrl = item.ausenciaGps ? `https://www.google.com/maps?q=${item.ausenciaGps}` : null;
-            const absenceEl = document.createElement('div');
-            absenceEl.className = 'timeline-step-item ausencia';
-            absenceEl.innerHTML = `
-                <div class="timeline-dot"><i class="ph ph-ban"></i></div>
-                <div class="timeline-content-card" style="border-color: var(--tea-red-border); background: var(--tea-red-light);">
-                    <div class="timeline-title-row">
-                        <strong style="color: var(--tea-red);"><i class="ph ph-x-circle"></i> Cancelado pelo Usuário</strong>
-                        ${item.ausenciaTimestamp ? `<span class="timeline-time-pill" style="background: var(--tea-red); color: #fff;">${escapeHtml(item.ausenciaTimestamp)}</span>` : ''}
-                    </div>
-                    ${item.ausenciaMotivo ? `<div class="text-xs font-bold" style="color: var(--text-primary);">Motivo: "${escapeHtml(item.ausenciaMotivo)}"</div>` : ''}
-                    ${mapsUrl ? `
-                        <a href="${mapsUrl}" target="_blank" class="btn-maps-link" style="background: var(--tea-red);">
-                            <i class="ph ph-map-pin"></i> Ver Local do Cancelamento no Maps
-                        </a>
-                    ` : ''}
-                </div>
-            `;
-            trackGroup.appendChild(absenceEl);
-        }
-
-        if (hasTimelineItems) {
-            DOM.gpsModalBody.appendChild(trackGroup);
-        } else {
-            DOM.gpsModalBody.innerHTML = '<div class="text-center text-muted font-bold py-8 text-sm">Nenhum evento de transporte registrado.</div>';
-        }
-
-        DOM.gpsModalOverlay.classList.add('active');
-        DOM.gpsModal.classList.add('active');
-    }
-
-    function closeGpsModal() {
-        DOM.gpsModalOverlay.classList.remove('active');
-        DOM.gpsModal.classList.remove('active');
-    }
-
-    if (DOM.btnCloseGpsModal) DOM.btnCloseGpsModal.addEventListener('click', closeGpsModal);
-    if (DOM.btnDismissGpsModal) DOM.btnDismissGpsModal.addEventListener('click', closeGpsModal);
-    if (DOM.gpsModalOverlay) DOM.gpsModalOverlay.addEventListener('click', closeGpsModal);
-
-    // ---- 8. Submissão do Formulário (CREATE & UPDATE) ----
-    DOM.form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        if (!isAdmin()) { showToast('Acesso negado.', 'error'); return; }
-
-        const id = document.getElementById('formId').value;
-        const dataInicioVal = document.getElementById('formDataInicio').value || localISOTime;
-        const fInicio = document.getElementById('formInicio').value;
-        const fTermino = document.getElementById('formTermino').value;
-
-        const pVal = document.getElementById('formProfissional').value;
-        const pacVal = document.getElementById('formPaciente').value;
-        const tVal = document.getElementById('formTipo').value;
-        const escVal = document.getElementById('formEscola').value;
-        const telVal = document.getElementById('formTelefone').value;
-        const transpVal = document.getElementById('formTransporte') ? document.getElementById('formTransporte').value : 'Ambos';
-        const obsVal = document.getElementById('formObs').value;
-        const horaInicio = parseInt(fInicio.split(':')[0], 10);
-        const turnoCalculado = horaInicio >= 12 ? 'Tarde' : 'Manhã';
-
-        if (id) {
-            const { dateRef } = getDateFilterInfo();
-            const currentList = getAppointmentsForDate(dateRef);
-            const existing = currentList.find(a => String(a.id) === String(id)) || appointments.find(a => String(a.id) === String(id) || String(a.baseId) === String(id));
-            if (existing) {
-                const scope = document.getElementById('editScope')?.value || 'forward';
-                const rawId = String(existing.id);
-                const baseId = existing.baseId || (rawId.startsWith('proj_') ? rawId.replace(/^proj_/, '').replace(/_\d{4}-\d{2}-\d{2}$/, '') : rawId);
-
-                if (scope === 'day') {
-                    let target = existing.isProjected ? ensureConcreteRecord(existing, dateRef || dataInicioVal) : existing;
-                    target.baseId = baseId;
-                    target.profissional = pVal;
-                    target.tipo = tVal;
-                    target.paciente = pacVal;
-                    target.turno = turnoCalculado;
-                    target.inicio = fInicio;
-                    target.termino = fTermino;
-                    target.escola = escVal;
-                    target.telefone = telVal;
-                    target.transporte = transpVal;
-                    target.obs = obsVal;
-                    target.isProjected = false;
-                    target._updatedAt = Date.now();
-
-                    saveLocalState();
-                    updateFilterOptions(); render(); closeDrawer();
-                    await supabaseUpdateAppointment(target);
-                    showToast('Agendamento deste dia atualizado!');
-                } else if (scope === 'forward') {
-                    const effectiveDate = dataInicioVal || dateRef || localISOTime;
-                    
-                    let baseTemplate = appointments.find(a => String(a.id) === String(baseId));
-                    if (baseTemplate && baseTemplate.data && baseTemplate.data < effectiveDate) {
-                        const prevDate = new Date(effectiveDate);
-                        prevDate.setDate(prevDate.getDate() - 1);
-                        baseTemplate.dataFim = prevDate.toISOString().split('T')[0];
-                        baseTemplate._updatedAt = Date.now();
-                        await supabaseUpdateAppointment(baseTemplate);
-
-                        const newSeriesRecord = {
-                            id: `${Date.now()}_rec_${Math.random().toString(36).substr(2, 5)}`,
-                            data: effectiveDate,
-                            dataFim: '',
-                            profissional: pVal,
-                            tipo: tVal,
-                            paciente: pacVal,
-                            dia: getWeekdayFromISO(effectiveDate),
-                            turno: turnoCalculado,
-                            inicio: fInicio,
-                            termino: fTermino,
-                            escola: escVal,
-                            telefone: telVal,
-                            transporte: transpVal,
-                            obs: obsVal,
-                            status: '',
-                            monitora: '',
-                            isProjected: false,
-                            _updatedAt: Date.now()
-                        };
-                        appointments.push(newSeriesRecord);
-
-                        appointments.forEach(a => {
-                            if (a.baseId === baseId && a.data >= effectiveDate) {
-                                a.baseId = newSeriesRecord.id;
-                                a.profissional = pVal;
-                                a.tipo = tVal;
-                                a.paciente = pacVal;
-                                a.escola = escVal;
-                                a.telefone = telVal;
-                                a.transporte = transpVal;
-                                a.inicio = fInicio;
-                                a.termino = fTermino;
-                                a.turno = turnoCalculado;
-                                a.obs = obsVal;
-                                a._updatedAt = Date.now();
-                            }
-                        });
-
-                        saveLocalState();
-                        updateFilterOptions(); render(); closeDrawer();
-                        await supabaseCreateAppointments([newSeriesRecord]);
-                        showToast('Série atualizada a partir desta data!');
-                    } else {
-                        let target = baseTemplate || existing;
-                        target.profissional = pVal;
-                        target.tipo = tVal;
-                        target.paciente = pacVal;
-                        target.turno = turnoCalculado;
-                        target.inicio = fInicio;
-                        target.termino = fTermino;
-                        target.escola = escVal;
-                        target.telefone = telVal;
-                        target.transporte = transpVal;
-                        target.obs = obsVal;
-                        target._updatedAt = Date.now();
-
-                        const recordsToUpdate = [target];
-                        appointments.forEach(a => {
-                            const aBase = a.baseId || (String(a.id).includes('_') ? String(a.id).split('_')[0] : String(a.id));
-                            if ((aBase === baseId || a.baseId === baseId) && a !== target) {
-                                a.profissional = pVal;
-                                a.tipo = tVal;
-                                a.paciente = pacVal;
-                                a.escola = escVal;
-                                a.telefone = telVal;
-                                a.transporte = transpVal;
-                                a.inicio = fInicio;
-                                a.termino = fTermino;
-                                a.turno = turnoCalculado;
-                                a.obs = obsVal;
-                                a._updatedAt = Date.now();
-                                recordsToUpdate.push(a);
-                            }
-                        });
-
-                        saveLocalState();
-                        updateFilterOptions(); render(); closeDrawer();
-                        await supabaseCreateAppointments(recordsToUpdate);
-                        showToast('Série de agendamentos atualizada!');
-                    }
+            if (isExactDate || isWeekdayMatch) {
+                // Chave de slot que inclui horário e atendimento para permitir múltiplos horários legítimos do mesmo paciente
+                const key = `${this.normalizeText(item.patient_name)}|${this.normalizeText(item.professional_name)}|${this.normalizeText(item.therapy_type || '')}|${(item.start_time || '').trim()}`;
+                
+                if (!map.has(key)) {
+                    map.set(key, item);
                 } else {
-                    let target = appointments.find(a => String(a.id) === String(baseId) || String(a.id) === String(rawId)) || existing;
-                    target.profissional = pVal;
-                    target.tipo = tVal;
-                    target.paciente = pacVal;
-                    target.turno = turnoCalculado;
-                    target.inicio = fInicio;
-                    target.termino = fTermino;
-                    target.escola = escVal;
-                    target.telefone = telVal;
-                    target.transporte = transpVal;
-                    target.obs = obsVal;
-                    target.isProjected = false;
-                    target.dataFim = '';
-                    target._updatedAt = Date.now();
-                    if (dataInicioVal) {
-                        target.data = dataInicioVal;
-                        target.dia = getWeekdayFromISO(dataInicioVal) || target.dia;
+                    const existing = map.get(key);
+                    const existingDate = existing.override_date || existing.start_date || '';
+                    // Se for a data exata, a ocorrência concreta substitui o template semanal correspondente
+                    if (isExactDate && existingDate !== dateStr) {
+                        map.set(key, item);
+                    } else if (isExactDate && (item.id || '') > (existing.id || '')) {
+                        map.set(key, item);
                     }
-
-                    const recordsToUpdate = [target];
-                    appointments.forEach(a => {
-                        const aBase = a.baseId || (String(a.id).includes('_') ? String(a.id).split('_')[0] : String(a.id));
-                        if ((aBase === baseId || a.baseId === baseId) && a !== target) {
-                            a.profissional = pVal;
-                            a.tipo = tVal;
-                            a.paciente = pacVal;
-                            a.escola = escVal;
-                            a.telefone = telVal;
-                            a.transporte = transpVal;
-                            a.inicio = fInicio;
-                            a.termino = fTermino;
-                            a.turno = turnoCalculado;
-                            a.obs = obsVal;
-                            a._updatedAt = Date.now();
-                            recordsToUpdate.push(a);
-                        }
-                    });
-
-                    saveLocalState();
-                    updateFilterOptions(); render(); closeDrawer();
-                    await supabaseCreateAppointments(recordsToUpdate);
-                    showToast('Série de agendamentos atualizada em todos os dias!');
                 }
             }
-        } else {
-            // CRIAR NOVO AGENDAMENTO RECORRENTE
-            const newRecord = {
-                id: `${Date.now()}_rec_${Math.random().toString(36).substr(2, 5)}`,
-                data: dataInicioVal,
-                dataFim: '',
-                profissional: pVal,
-                tipo: tVal,
-                paciente: pacVal,
-                dia: getWeekdayFromISO(dataInicioVal),
-                turno: turnoCalculado,
-                inicio: fInicio,
-                termino: fTermino,
-                escola: escVal,
-                telefone: telVal,
-                transporte: transpVal,
-                obs: obsVal,
-                status: '',
-                monitora: '',
-                isProjected: false,
-                _updatedAt: Date.now()
-            };
+        });
 
-            appointments.push(newRecord);
-            markItemPendingSync(newRecord);
-
-            if (DOM.fData && dataInicioVal) DOM.fData.value = dataInicioVal;
-            switchTab('agenda');
-            updateDisplayDateLabel();
-            updateFilterOptions();
-            render();
-            closeDrawer();
-            showToast('Série recorrente cadastrada!');
-            await supabaseCreateAppointments([newRecord]);
-        }
-    });
-
-    // ---- 9. Navegação por Datas & Filtros ----
-    function getDateFilterInfo() {
-        const dateRef = DOM.fData ? DOM.fData.value : localISOTime;
-        return { dateRef, targetWeekday: getWeekdayFromISO(dateRef) };
+        return Array.from(map.values());
     }
 
-    function updateDisplayDateLabel() {
-        if (!DOM.displayDateLabel || !DOM.fData) return;
-        if (!DOM.fData.value) {
-            DOM.displayDateLabel.textContent = 'Todas as Datas';
-            return;
-        }
-        const [y, m, d] = DOM.fData.value.split('-');
-        if (!y || !m || !d) {
-            DOM.displayDateLabel.textContent = 'Todas as Datas';
-            return;
-        }
-        const dateObj = new Date(y, m - 1, d);
-        if (isNaN(dateObj.getTime())) {
-            DOM.displayDateLabel.textContent = 'Todas as Datas';
-            return;
-        }
-        const weekday = getWeekdayFromISO(DOM.fData.value);
-        const formattedDate = `${String(dateObj.getDate()).padStart(2, '0')}/${String(dateObj.getMonth() + 1).padStart(2, '0')}/${dateObj.getFullYear()}`;
-        DOM.displayDateLabel.textContent = weekday ? `${weekday}, ${formattedDate}` : formattedDate;
+    // ---- Instância Concreta Padronizada ----
+    ensureConcreteSchedule(item, dateStr) {
+        if (!item) return null;
+        const itemDate = item.override_date || item.start_date;
+        if (itemDate === dateStr) return item;
+
+        const clone = JSON.parse(JSON.stringify(item));
+        clone.id = `${Date.now()}_inst_${Math.random().toString(36).substring(2, 7)}`;
+        clone.parent_id = item.id;
+        clone.base_id = item.base_id || item.id;
+        clone.start_date = dateStr;
+        clone.override_date = dateStr;
+        clone.day_of_week = this.getWeekday(dateStr);
+        clone.shift = item.shift || (parseInt(String(item.start_time || '8').split(':')[0], 10) >= 12 ? 'Tarde' : 'Manhã');
+
+        this.schedules.push(clone);
+        this.saveAllLocalState();
+        return clone;
     }
 
-    function shiftDate(days) {
-        if (!DOM.fData) return;
-        if (!DOM.fData.value) DOM.fData.value = localISOTime;
-        const [y, m, d] = DOM.fData.value.split('-');
-        const date = new Date(y, m - 1, d);
-        if (isNaN(date.getTime())) {
-            DOM.fData.value = localISOTime;
-            updateDisplayDateLabel();
-            render();
-            return;
-        }
-        date.setDate(date.getDate() + days);
-        if (date.getDay() === 6) {
-            date.setDate(date.getDate() + (days > 0 ? 2 : -1));
-        } else if (date.getDay() === 0) {
-            date.setDate(date.getDate() + (days > 0 ? 1 : -2));
-        }
-        DOM.fData.value = date.toISOString().split('T')[0];
-        updateDisplayDateLabel();
-        render();
+    // ---- Filtros ----
+    handleFilterChange() {
+        this.filters.search = this.normalizeText(this.DOM.inputSearchPatient.value);
+        this.filters.professional = this.DOM.selectProfFilter ? this.DOM.selectProfFilter.value : '';
+        this.filters.shift = this.DOM.selectShiftFilter ? this.DOM.selectShiftFilter.value : '';
+        this.filters.school = this.DOM.selectSchoolFilter ? this.DOM.selectSchoolFilter.value : '';
+
+        const hasFilter = Boolean(this.filters.search || this.filters.professional || this.filters.shift || this.filters.school);
+        if (hasFilter) this.DOM.btnResetFilters.classList.remove('hidden');
+        else this.DOM.btnResetFilters.classList.add('hidden');
+
+        this.renderAll();
     }
 
-    const btnPrevDay = document.getElementById('btnPrevDay');
-    const btnNextDay = document.getElementById('btnNextDay');
-    if (btnPrevDay) btnPrevDay.addEventListener('click', () => shiftDate(-1));
-    if (btnNextDay) btnNextDay.addEventListener('click', () => shiftDate(1));
-    if (DOM.fData) DOM.fData.addEventListener('change', () => { updateDisplayDateLabel(); render(); });
-
-    const dateDisplayBox = document.querySelector('.date-display-box');
-    const triggerDatePicker = (inputEl) => {
-        if (inputEl && typeof inputEl.showPicker === 'function') {
-            try { inputEl.showPicker(); } catch (err) {}
-        }
-    };
-
-    if (dateDisplayBox && DOM.fData) {
-        dateDisplayBox.addEventListener('click', () => triggerDatePicker(DOM.fData));
+    resetFilters() {
+        if (this.DOM.inputSearchPatient) this.DOM.inputSearchPatient.value = '';
+        if (this.DOM.selectProfFilter) this.DOM.selectProfFilter.value = '';
+        if (this.DOM.selectShiftFilter) this.DOM.selectShiftFilter.value = '';
+        if (this.DOM.selectSchoolFilter) this.DOM.selectSchoolFilter.value = '';
+        this.handleFilterChange();
     }
 
-    document.querySelectorAll('input[type="date"]').forEach(input => {
-        input.addEventListener('click', () => triggerDatePicker(input));
-    });
+    getFilteredSchedules() {
+        const rawList = this.getSchedulesForDate(this.selectedDate);
 
-    function handleFilterChange() {
-        updateClearFiltersButton();
-        render();
-    }
+        return rawList.filter(item => {
+            const pMatch = !this.filters.professional || item.professional_name === this.filters.professional;
+            const sMatch = !this.filters.shift || item.shift === this.filters.shift;
+            const eMatch = !this.filters.school || item.school_name === this.filters.school;
+            const patientMatch = !this.filters.search || this.normalizeText(item.patient_name).includes(this.filters.search);
 
-    [DOM.fProf, DOM.fTurno, DOM.fEscola].forEach(el => {
-        if (el) el.addEventListener('change', handleFilterChange);
-    });
-
-    if (DOM.fPaciente) DOM.fPaciente.addEventListener('input', handleFilterChange);
-
-    function updateClearFiltersButton() {
-        if (!DOM.btnClearFilters) return;
-        const hasFilter = (DOM.fProf && DOM.fProf.value) || (DOM.fTurno && DOM.fTurno.value) || (DOM.fEscola && DOM.fEscola.value) || (DOM.fPaciente && DOM.fPaciente.value);
-        if (hasFilter) DOM.btnClearFilters.classList.remove('hidden');
-        else DOM.btnClearFilters.classList.add('hidden');
-    }
-
-    if (DOM.btnClearFilters) {
-        DOM.btnClearFilters.addEventListener('click', () => {
-            if (DOM.fProf) DOM.fProf.value = '';
-            if (DOM.fTurno) DOM.fTurno.value = '';
-            if (DOM.fEscola) DOM.fEscola.value = '';
-            if (DOM.fPaciente) DOM.fPaciente.value = '';
-            handleFilterChange();
+            return pMatch && sMatch && eMatch && patientMatch;
         });
     }
 
-    if (DOM.dashTotalCard) {
-        DOM.dashTotalCard.addEventListener('click', () => {
-            if (DOM.fTurno) DOM.fTurno.value = '';
-            if (DOM.fEscola) DOM.fEscola.value = '';
-            switchTab('agenda');
-            render();
+    updateFilterDropdowns() {
+        const profs = new Set(), schools = new Set();
+        this.schedules.forEach(s => {
+            if (s.professional_name) profs.add(s.professional_name);
+            if (s.school_name) schools.add(s.school_name);
         });
-    }
-    if (DOM.dashMorningCard) {
-        DOM.dashMorningCard.addEventListener('click', () => {
-            if (DOM.fTurno) DOM.fTurno.value = DOM.fTurno.value === 'Manhã' ? '' : 'Manhã';
-            switchTab('agenda');
-            render();
-        });
-    }
-    if (DOM.dashAfternoonCard) {
-        DOM.dashAfternoonCard.addEventListener('click', () => {
-            if (DOM.fTurno) DOM.fTurno.value = DOM.fTurno.value === 'Tarde' ? '' : 'Tarde';
-            switchTab('agenda');
-            render();
-        });
-    }
 
-    function getFilteredAppointments({ ignoreTurno = false, ignoreEscola = false } = {}) {
-        const { dateRef } = getDateFilterInfo();
-        const baseList = getAppointmentsForDate(dateRef);
-        const selectedTurno = normalizeTurnoLabel(DOM.fTurno?.value || '');
-        const selectedProfissional = DOM.fProf?.value || '';
-        const selectedEscola = DOM.fEscola?.value || '';
-        const searchVal = normalizeFilterText(DOM.fPaciente?.value || '');
-
-        return baseList.filter(a => {
-            const pMatch = valuesMatchFilter(a.profissional, selectedProfissional);
-            const itemTurno = normalizeTurnoLabel(a.turno, a.inicio);
-            const tMatch = ignoreTurno || !selectedTurno || itemTurno === selectedTurno;
-            const eMatch = ignoreEscola || valuesMatchFilter(a.escola, selectedEscola);
-            const pacienteMatch = !searchVal || normalizeFilterText(a.paciente).includes(searchVal);
-            return pMatch && tMatch && eMatch && pacienteMatch;
-        });
-    }
-
-    // ---- 10. Renderização Principal da Agenda ----
-    function render() {
-        updateDisplayDateLabel();
-        updateClearFiltersButton();
-        const { dateRef } = getDateFilterInfo();
-        let filtered = getFilteredAppointments();
-        if (!dateRef) {
-            filtered.sort((a, b) => {
-                const dayA = getItemWeekdayOrder(a);
-                const dayB = getItemWeekdayOrder(b);
-                if (dayA !== dayB) return dayA - dayB;
-                if (a.data && b.data && a.data !== b.data) return a.data.localeCompare(b.data);
-                return (a.inicio || '24:00').localeCompare(b.inicio || '24:00');
+        const populate = (set, selectEl) => {
+            if (!selectEl) return;
+            const current = selectEl.value;
+            const firstOpt = selectEl.options.length ? selectEl.options[0].text : '';
+            selectEl.innerHTML = `<option value="">${firstOpt}</option>`;
+            Array.from(set).sort().forEach(val => {
+                const opt = document.createElement('option');
+                opt.value = val;
+                opt.textContent = val;
+                selectEl.appendChild(opt);
             });
-        } else {
-            filtered.sort((a, b) => (a.inicio || '24:00').localeCompare(b.inicio || '24:00'));
-        }
+            if (current && set.has(current)) selectEl.value = current;
+        };
 
-        const activeFiltered = filtered.filter(a => a.status !== 'CANCELADO');
-        if (DOM.dashTotal) DOM.dashTotal.textContent = activeFiltered.length;
+        populate(profs, this.DOM.selectProfFilter);
+        populate(schools, this.DOM.selectSchoolFilter);
+    }
 
-        const byTurnoBase = getFilteredAppointments({ ignoreTurno: true }).filter(a => a.status !== 'CANCELADO');
-        if (DOM.dashMorning) DOM.dashMorning.textContent = byTurnoBase.filter(a => normalizeTurnoLabel(a.turno, a.inicio) === 'Manhã').length;
-        if (DOM.dashAfternoon) DOM.dashAfternoon.textContent = byTurnoBase.filter(a => normalizeTurnoLabel(a.turno, a.inicio) === 'Tarde').length;
+    // ---- Renderização da Interface ----
+    renderAll() {
+        this.updateDateLabel();
+        this.updateFilterDropdowns();
+        this.renderScheduleCards();
+        this.renderMonitorsList();
+        this.renderSummaryMetrics();
+    }
 
-        const byEscolaBase = getFilteredAppointments({ ignoreEscola: true }).filter(a => a.status !== 'CANCELADO');
-        const schoolCounts = new Map();
-        byEscolaBase.forEach(item => {
-            const school = (item.escola || '').trim();
-            if (school) schoolCounts.set(school, (schoolCounts.get(school) || 0) + 1);
-        });
+    renderScheduleCards() {
+        const filtered = this.getFilteredSchedules();
+        filtered.sort((a, b) => (a.start_time || '24:00').localeCompare(b.start_time || '24:00'));
 
-        if (DOM.dashSchoolsCount) DOM.dashSchoolsCount.textContent = schoolCounts.size;
-
-        if (DOM.dashSchools) {
-            DOM.dashSchools.innerHTML = '';
-            const sortedSchools = Array.from(schoolCounts.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-            if (sortedSchools.length === 0) {
-                DOM.dashSchools.innerHTML = '<div class="text-xs font-semibold text-text-muted p-2">Nenhuma instituição registrada.</div>';
-            } else {
-                sortedSchools.forEach(([school, count]) => {
-                    const row = document.createElement('div');
-                    row.className = 'flex justify-between items-center p-2 rounded-lg cursor-pointer transition-all';
-                    row.style.cssText = 'background: var(--surface-card); border: 1px solid var(--border-main);';
-                    if (DOM.fEscola && DOM.fEscola.value === school) {
-                        row.style.borderColor = 'var(--tea-blue)';
-                        row.style.background = 'var(--tea-blue-light)';
-                    }
-                    row.innerHTML = `
-                        <span class="font-bold text-sm" style="color: var(--text-primary);">${escapeHtml(school)}</span>
-                        <span style="background: var(--tea-violet-light); color: var(--tea-violet); font-weight: 800; padding: 2px 10px; border-radius: 99px; font-size: 0.82rem;">${count}</span>
-                    `;
-                    row.addEventListener('click', () => {
-                        if (!DOM.fEscola) return;
-                        DOM.fEscola.value = DOM.fEscola.value === school ? '' : school;
-                        switchTab('agenda');
-                        render();
-                    });
-                    DOM.dashSchools.appendChild(row);
-                });
-            }
-        }
-
-        DOM.agendaList.innerHTML = '';
+        this.DOM.scheduleCardsContainer.innerHTML = '';
 
         if (filtered.length === 0) {
-            DOM.agendaList.innerHTML = `<div class="agenda-card text-center text-muted font-bold py-6">${dateRef ? 'Nenhum atendimento para a data selecionada.' : 'Nenhum atendimento cadastrado.'}</div>`;
+            this.DOM.scheduleCardsContainer.innerHTML = `<div class="dashboard-banner blue text-center py-6 font-bold text-muted">Nenhum atendimento encontrado para os filtros selecionados.</div>`;
             return;
         }
 
         filtered.forEach(item => {
-            const todayStatus = item.status || '';
-            const todayMonitor = item.monitora || '';
-            const statusParts = getStatusParts(todayStatus);
-            const isCancelled = todayStatus === 'CANCELADO';
-            const cardOpacity = isCancelled ? 'opacity-40' : '';
-            const turnoLabel = normalizeTurnoLabel(item.turno, item.inicio);
-            const turnoClass = turnoLabel === 'Tarde' ? 'turno-tarde' : '';
-            const phone = normalizeWhatsappPhone(item.telefone);
-            const dayBadgeText = getItemDayBadgeText(item);
-            const effectiveItemDate = item.data || dateRef || localISOTime;
+            const isCancelled = item.status === 'CANCELADO';
+            const isAfternoon = item.shift === 'Tarde';
+            const phone = this.normalizePhone(item.phone);
+            const effectiveDate = item.override_date || item.start_date || this.selectedDate;
 
-            const allowedSteps = getProgressStepsForTransport(item.transporte);
-            const monitorOptions = MONITORAS.map(m => `<option value="${escapeHtml(m)}" ${todayMonitor === m ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('');
+            const monitorOptions = this.monitors.map(m => `<option value="${this.escapeHtml(m)}" ${item.assigned_monitor === m ? 'selected' : ''}>${this.escapeHtml(m)}</option>`).join('');
 
-            let auditCount = 0;
-            allowedSteps.forEach(step => { if (statusParts.includes(step.code)) auditCount++; });
-            if (isCancelled && (item.ausenciaMotivo || item.ausenciaGps)) auditCount++;
+            const steps = [
+                { code: 'BUSCADO_ESCOLA', label: 'Escola', icon: 'ph-buildings', time: item.step_escola_time },
+                { code: 'ENTREGUE_ONG', label: 'ONG', icon: 'ph-house-line', time: item.step_ong_time },
+                { code: 'SAIDA_ONG', label: 'Saída', icon: 'ph-sign-out', time: item.step_saida_time },
+                { code: 'DEVOLVIDO_ESCOLA', label: 'Devolvido', icon: 'ph-graduation-cap', time: item.step_devolvido_time }
+            ];
 
-            let maxIndex = -1;
-            allowedSteps.forEach((step, idx) => {
-                if (statusParts.includes(step.code)) maxIndex = idx;
-            });
+            let doneCount = 0;
+            steps.forEach(s => { if (s.time) doneCount++; });
+            if (isCancelled && item.cancel_reason) doneCount++;
 
-            let fillPercent = 0;
-            if (allowedSteps.length > 1 && maxIndex >= 0) {
-                fillPercent = (maxIndex / (allowedSteps.length - 1)) * 100;
-            } else if (allowedSteps.length === 1 && maxIndex >= 0) {
-                fillPercent = 100;
-            }
+            let lastDoneIdx = -1;
+            steps.forEach((s, idx) => { if (s.time) lastDoneIdx = idx; });
+            const fillPercent = lastDoneIdx >= 0 ? (lastDoneIdx / (steps.length - 1)) * 100 : 0;
 
-            const trackerNodesHtml = allowedSteps.map(step => {
-                const completed = statusParts.includes(step.code);
-                const timestamp = item[step.timeField] || '';
-                return `
-                    <button type="button" ${isCancelled ? 'disabled' : ''} data-action="progress" data-id="${escapeHtml(item.id)}" data-date="${escapeHtml(effectiveItemDate)}" data-step-code="${escapeHtml(step.code)}" data-patient="${escapeHtml(item.paciente)}" class="tracker-node-item ${completed ? 'completed' : ''}">
-                        <div class="tracker-circle">
-                            <i class="ph ${completed ? 'ph-check' : step.icon}"></i>
-                        </div>
-                        <span class="tracker-node-label">${escapeHtml(step.label)}</span>
-                        ${timestamp ? `<span class="tracker-time-pill">${escapeHtml(timestamp)}</span>` : ''}
-                    </button>
-                `;
-            }).join('');
+            const trackerHtml = steps.map(s => `
+                <button type="button" ${isCancelled ? 'disabled' : ''} data-action="progress" data-id="${this.escapeHtml(item.id)}" data-date="${this.escapeHtml(effectiveDate)}" data-step="${s.code}" class="node-btn ${s.time ? 'done' : ''}">
+                    <div class="node-icon-circle"><i class="ph ${s.time ? 'ph-check' : s.icon}"></i></div>
+                    <span class="node-text">${this.escapeHtml(s.label)}</span>
+                    ${s.time ? `<span class="node-time">${this.escapeHtml(s.time)}</span>` : ''}
+                </button>
+            `).join('');
 
             const card = document.createElement('div');
-            card.className = `agenda-card ${turnoClass} ${cardOpacity}`;
+            card.className = `schedule-card ${isAfternoon ? 'afternoon-shift' : ''} ${isCancelled ? 'opacity-40' : ''}`;
             card.innerHTML = `
-                <div class="card-top-bar">
-                    <div class="card-header-left">
-                        <h3 class="patient-name-title">${escapeHtml(item.paciente)}</h3>
-                        <div class="card-badges-group">
-                            ${dayBadgeText ? `<span class="badge-dia"><i class="ph ph-calendar"></i> ${escapeHtml(dayBadgeText)}</span>` : ''}
-                            <span class="badge-time"><i class="ph ph-clock"></i> ${escapeHtml(item.inicio || '--')} às ${escapeHtml(item.termino || '--')}</span>
-                            <span class="badge-turno">${escapeHtml(turnoLabel)}</span>
+                <div class="card-head">
+                    <div>
+                        <h3 class="patient-title">${this.escapeHtml(item.patient_name)}</h3>
+                        <div class="badges-stack">
+                            <span class="time-badge"><i class="ph ph-clock"></i> ${this.escapeHtml(item.start_time)} às ${this.escapeHtml(item.end_time)}</span>
+                            <span class="shift-badge">${this.escapeHtml(item.shift)}</span>
                         </div>
                     </div>
-                    <div class="card-actions-admin admin-only">
-                        <button type="button" class="icon-btn-card" data-action="edit" data-id="${escapeHtml(item.id)}" data-date="${escapeHtml(effectiveItemDate)}"><i class="ph ph-pencil-simple"></i></button>
-                        <button type="button" class="icon-btn-card delete" data-action="delete" data-id="${escapeHtml(item.id)}" data-date="${escapeHtml(effectiveItemDate)}"><i class="ph ph-trash"></i></button>
+                    <div class="card-admin-actions admin-only">
+                        <button type="button" class="card-icon-btn" data-action="edit" data-id="${this.escapeHtml(item.id)}" data-date="${this.escapeHtml(effectiveDate)}"><i class="ph ph-pencil-simple"></i></button>
+                        <button type="button" class="card-icon-btn delete" data-action="delete" data-id="${this.escapeHtml(item.id)}" data-date="${this.escapeHtml(effectiveDate)}"><i class="ph ph-trash"></i></button>
                     </div>
                 </div>
 
-                <div class="card-compact-meta">
-                    <div class="meta-line-item">
-                        <i class="ph ph-user"></i>
-                        <span>${escapeHtml(item.profissional)} &bull; <strong>${escapeHtml(item.tipo)}</strong></span>
-                    </div>
-                    ${item.escola ? `
-                    <div class="meta-line-item">
-                        <i class="ph ph-buildings"></i>
-                        <span>${escapeHtml(item.escola)}</span>
-                    </div>` : ''}
+                <div class="meta-details">
+                    <div class="meta-item"><i class="ph ph-user"></i> <span>${this.escapeHtml(item.professional_name)} &bull; <strong>${this.escapeHtml(item.therapy_type)}</strong></span></div>
+                    ${item.school_name ? `<div class="meta-item"><i class="ph ph-buildings"></i> <span>${this.escapeHtml(item.school_name)}</span></div>` : ''}
                 </div>
 
-                <div class="card-actions-strip">
-                    <div class="chips-left-group">
-                        <span class="badge-transport"><i class="ph ph-bus"></i> ${item.transporte || 'Ida e Volta'}</span>
-                        <button type="button" class="btn-audit-gps" data-action="audit-gps" data-id="${escapeHtml(item.id)}" data-date="${escapeHtml(effectiveItemDate)}">
-                            <i class="ph ph-map-pin"></i> GPS (${auditCount})
+                <div class="actions-row">
+                    <div class="flex items-center gap-2">
+                        <span class="transport-chip"><i class="ph ph-bus"></i> ${this.escapeHtml(item.transport_type || 'Ambos')}</span>
+                        <button type="button" class="gps-btn" data-action="audit-gps" data-id="${this.escapeHtml(item.id)}" data-date="${this.escapeHtml(effectiveDate)}">
+                            <i class="ph ph-map-pin"></i> GPS (${doneCount})
                         </button>
-                        ${!isCancelled && phone ? `<a href="https://wa.me/${phone}" target="_blank" rel="noopener noreferrer" class="whatsapp-float-btn" title="Conversar no WhatsApp"><i class="ph ph-whatsapp-logo"></i></a>` : ''}
+                        ${!isCancelled && phone ? `<a href="https://wa.me/${phone}" target="_blank" rel="noopener noreferrer" class="wpp-btn" title="WhatsApp"><i class="ph ph-whatsapp-logo"></i></a>` : ''}
                     </div>
 
-                    <div class="monitor-selector-inline">
-                        <select class="monitor-select-compact daily-monitor-select" data-id="${escapeHtml(item.id)}" data-date="${escapeHtml(effectiveItemDate)}">
+                    <div class="flex items-center gap-2">
+                        <select class="monitor-select card-monitor-select" data-id="${this.escapeHtml(item.id)}" data-date="${this.escapeHtml(effectiveDate)}">
                             <option value="">Monitora...</option>
                             ${monitorOptions}
                         </select>
-                        <button type="button" data-action="absence" data-id="${escapeHtml(item.id)}" data-date="${escapeHtml(effectiveItemDate)}" data-patient="${escapeHtml(item.paciente)}" class="absence-toggle-btn-compact ${isCancelled ? 'active' : ''}">
+                        <button type="button" data-action="cancel" data-id="${this.escapeHtml(item.id)}" data-date="${this.escapeHtml(effectiveDate)}" data-patient="${this.escapeHtml(item.patient_name)}" class="cancel-btn ${isCancelled ? 'active' : ''}">
                             <i class="ph ph-ban"></i> ${isCancelled ? 'Cancelado' : 'Cancelar'}
                         </button>
                     </div>
                 </div>
 
-                <div class="progress-tracker-container">
-                    <div class="tracker-track-bg">
-                        <div class="tracker-track-fill" style="width: ${fillPercent}%;"></div>
-                    </div>
-                    <div class="tracker-nodes-row">
-                        ${trackerNodesHtml}
-                    </div>
+                <div class="tracker-box">
+                    <div class="tracker-bg-line"><div class="tracker-fill-line" style="width:${fillPercent}%;"></div></div>
+                    <div class="tracker-nodes">${trackerHtml}</div>
                 </div>
             `;
-            DOM.agendaList.appendChild(card);
+
+            this.DOM.scheduleCardsContainer.appendChild(card);
         });
     }
 
-    function renderMonitorsList() {
-        const container = document.getElementById('monitorsList');
-        if (!container) return;
-        container.innerHTML = '';
-        MONITORAS.forEach((m, idx) => {
+    renderMonitorsList() {
+        this.DOM.monitorsListContainer.innerHTML = '';
+        this.monitors.forEach((name, idx) => {
+            const item = document.createElement('div');
+            item.className = 'schedule-card flex-between';
+            item.style.padding = '12px 16px';
+            item.innerHTML = `
+                <span class="font-bold text-main">${this.escapeHtml(name)}</span>
+                <button type="button" class="card-icon-btn delete admin-only" data-action="remove-monitor" data-idx="${idx}"><i class="ph ph-trash"></i></button>
+            `;
+            this.DOM.monitorsListContainer.appendChild(item);
+        });
+    }
+
+    renderSummaryMetrics() {
+        const raw = this.getSchedulesForDate(this.selectedDate).filter(s => s.status !== 'CANCELADO');
+        this.DOM.kpiTotal.textContent = raw.length;
+        this.DOM.kpiMorning.textContent = raw.filter(s => s.shift === 'Manhã').length;
+        this.DOM.kpiAfternoon.textContent = raw.filter(s => s.shift === 'Tarde').length;
+
+        const schoolCounts = new Map();
+        raw.forEach(s => {
+            if (s.school_name) schoolCounts.set(s.school_name, (schoolCounts.get(s.school_name) || 0) + 1);
+        });
+
+        this.DOM.kpiSchoolsCount.textContent = schoolCounts.size;
+        this.DOM.schoolsListContainer.innerHTML = '';
+
+        if (schoolCounts.size === 0) {
+            this.DOM.schoolsListContainer.innerHTML = '<div class="text-muted font-bold text-sm">Nenhuma escola atendida nesta data.</div>';
+            return;
+        }
+
+        Array.from(schoolCounts.entries()).sort((a,b) => b[1] - a[1]).forEach(([school, count]) => {
             const row = document.createElement('div');
-            row.className = 'agenda-card flex justify-between items-center';
-            row.style.cssText = 'padding: 10px 14px; border-left: 3px solid var(--tea-violet);';
-            row.innerHTML = `<span class="font-bold text-sm">${escapeHtml(m)}</span><button type="button" class="icon-btn-card delete" onclick="removeMonitor(${idx})"><i class="ph ph-trash"></i></button>`;
-            container.appendChild(row);
-        });
-    }
-
-    window.removeMonitor = async (index) => {
-        if (!requireAdmin('remover monitora')) return;
-        const name = MONITORAS[index];
-        MONITORAS.splice(index, 1);
-        localStorage.setItem('lumina_monitoras', JSON.stringify(MONITORAS));
-        renderMonitorsList(); render();
-        try { await supabaseRequest(`${SUPABASE_TABLES.monitors}?monitora=eq.${encodeURIComponent(name)}`, { method: 'DELETE' }); } catch(e){}
-    };
-
-    const btnAddMonitor = document.getElementById('btnAddMonitor');
-    if (btnAddMonitor) {
-        btnAddMonitor.addEventListener('click', async () => {
-            if (!requireAdmin('adicionar monitora')) return;
-            const input = document.getElementById('newMonitorName');
-            const name = input?.value.trim();
-            if (name && !MONITORAS.includes(name)) {
-                MONITORAS.push(name);
-                localStorage.setItem('lumina_monitoras', JSON.stringify(MONITORAS));
-                if (input) input.value = '';
-                renderMonitorsList(); render();
-                try { await supabaseRequest(`${SUPABASE_TABLES.monitors}`, { method: 'POST', body: JSON.stringify({ id: Date.now().toString(), monitora: name }) }); } catch(e){}
-            }
-        });
-    }
-
-    // ---- 11. Listeners de Interação Interativa ----
-    if (DOM.agendaList) {
-        DOM.agendaList.addEventListener('click', async (event) => {
-            const button = event.target.closest('[data-action]');
-            if (!button) return;
-            const action = button.dataset.action;
-
-            if (action === 'audit-gps') {
-                const currentList = getAppointmentsForDate(button.dataset.date);
-                const item = currentList.find(a => String(a.id) === String(button.dataset.id));
-                if (item) openGpsAuditModal(item, button.dataset.date);
-            } else if (action === 'progress') {
-                const currentList = getAppointmentsForDate(button.dataset.date);
-                const rawItem = currentList.find(a => String(a.id) === String(button.dataset.id));
-                if (!rawItem) return;
-
-                const item = ensureConcreteRecord(rawItem, button.dataset.date);
-                const step = getProgressStep(button.dataset.stepCode);
-                let parts = getStatusParts(item.status).filter(p => p !== 'CANCELADO');
-
-                if (parts.includes(button.dataset.stepCode)) {
-                    parts = parts.filter(p => p !== button.dataset.stepCode);
-                    item[step.timeField] = '';
-                    item[step.gpsField] = '';
-                } else {
-                    parts.push(button.dataset.stepCode);
-                    item[step.timeField] = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-                    showToast('Obtendo localização GPS...', 'info');
-                    const coords = await captureGeolocation();
-                    item[step.gpsField] = coords;
-                }
-                item.status = parts.join(',');
-                saveLocalState();
-                render();
-                await supabaseUpdateAppointment(item);
-                if (parts.includes(button.dataset.stepCode)) {
-                    showToast(`Passo ${step.label} registrado! ${item[step.gpsField] ? '📍 GPS capturado' : ''}`);
-                }
-            } else if (action === 'absence') {
-                const currentList = getAppointmentsForDate(button.dataset.date);
-                const rawItem = currentList.find(a => String(a.id) === String(button.dataset.id));
-                if (!rawItem) return;
-                const item = ensureConcreteRecord(rawItem, button.dataset.date);
-
-                if (item.status === 'CANCELADO') {
-                    item.status = ''; item.ausenciaMotivo = ''; item.ausenciaTimestamp = ''; item.ausenciaGps = '';
-                } else {
-                    const reason = prompt(`Motivo do cancelamento de ${button.dataset.patient}:`);
-                    if (!reason || !reason.trim()) return;
-                    item.status = 'CANCELADO';
-                    item.ausenciaMotivo = reason.trim();
-                    item.ausenciaTimestamp = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-                    showToast('Obtendo localização GPS...', 'info');
-                    const coords = await captureGeolocation();
-                    item.ausenciaGps = coords;
-                }
-                saveLocalState();
-                render();
-                await supabaseUpdateAppointment(item);
-            } else if (action === 'edit') {
-                openDrawer('edit', button.dataset.id);
-            } else if (action === 'delete') {
-                if (!requireAdmin('excluir agendamentos')) return;
-                const targetDate = button.dataset.date || DOM.fData?.value || localISOTime;
-                const currentList = getAppointmentsForDate(targetDate);
-                const item = currentList.find(a => String(a.id) === String(button.dataset.id)) || appointments.find(a => String(a.id) === String(button.dataset.id));
-                if (!item) return;
-
-                const formattedTargetDate = formatDateBR(targetDate);
-                showConfirmationModal({
-                    title: 'Excluir Agendamento',
-                    message: `
-                        <div style="text-align: left;">
-                            <p style="margin-bottom: 8px;">Escolha o escopo de exclusão para <strong>${escapeHtml(item.paciente)}</strong>:</p>
-                            <div style="display: flex; flex-direction: column; gap: 6px; padding: 10px; border-radius: 10px; background: var(--surface-subtle); border: 1px solid var(--border-main);">
-                                <label style="display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.8rem; cursor: pointer;">
-                                    <input type="radio" name="deleteScopeOpt" value="day" checked> Apenas este dia (${formattedTargetDate})
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.8rem; color: var(--tea-red); cursor: pointer;">
-                                    <input type="radio" name="deleteScopeOpt" value="series"> Toda a série recorrente (Todos os dias)
-                                </label>
-                            </div>
-                        </div>
-                    `,
-                    iconClass: 'ph-trash',
-                    onConfirm: async () => {
-                        markUserInteraction();
-                        const scopeOpt = document.querySelector('input[name="deleteScopeOpt"]:checked')?.value || 'day';
-                        const targetId = String(button.dataset.id);
-                        const rawId = String(item.id || '');
-                        const baseId = item.baseId || (rawId.startsWith('proj_') ? rawId.replace(/^proj_/, '').replace(/_\d{4}-\d{2}-\d{2}$/, '') : rawId);
-
-                        if (scopeOpt === 'day') {
-                            const concrete = ensureConcreteRecord(item, targetDate);
-                            concrete.status = 'CANCELADO';
-                            concrete.ausenciaMotivo = 'Excluído da agenda do dia';
-                            concrete.ausenciaTimestamp = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-                            saveLocalState();
-                            render();
-                            showToast('Agendamento deste dia cancelado com sucesso!');
-                            await supabaseUpdateAppointment(concrete);
-                        } else {
-                            deletedIdsQueue.push(item);
-                            if (rawId) deletedIdsQueue.push(rawId);
-                            if (baseId) deletedIdsQueue.push(baseId);
-
-                            appointments = appointments.filter(a => {
-                                const aId = String(a.id);
-                                const aBase = String(a.baseId || '');
-
-                                if (aId === targetId || aId === rawId || aId === baseId) return false;
-                                if (aBase && (aBase === baseId || aBase === rawId || aBase === targetId)) return false;
-                                return true;
-                            });
-
-                            saveLocalState();
-                            render();
-                            showToast('Série de agendamentos excluída!');
-                            await supabaseDeleteAppointmentCompletely(item);
-                            await flushPendingSyncQueue();
-                        }
-                    }
-                });
-            }
-        });
-
-        DOM.agendaList.addEventListener('change', (event) => {
-            const select = event.target.closest('.daily-monitor-select');
-            if (select) {
-                const currentList = getAppointmentsForDate(select.dataset.date);
-                const rawItem = currentList.find(a => String(a.id) === String(select.dataset.id));
-                if (rawItem) {
-                    const item = ensureConcreteRecord(rawItem, select.dataset.date);
-                    item.monitora = select.value;
-                    saveLocalState();
-                    render();
-                    supabaseUpdateAppointment(item);
-                }
-            }
-        });
-    }
-
-    function updateFilterOptions() {
-        const profs = new Set(), escolas = new Set();
-        appointments.forEach(a => {
-            if(a.profissional) profs.add(a.profissional);
-            if(a.escola) escolas.add(a.escola);
-        });
-
-        const sortAndPopulate = (set, sel) => {
-            if(!sel) return;
-            const currentObj = sel.value;
-            sel.innerHTML = `<option value="">${sel.options[0].text}</option>`;
-            Array.from(set).sort().forEach(val => {
-                const opt = document.createElement('option');
-                opt.value = val; opt.textContent = val; sel.appendChild(opt);
+            row.className = 'schedule-card flex-between cursor-pointer';
+            row.style.padding = '10px 14px';
+            row.innerHTML = `
+                <span class="font-bold text-sm">${this.escapeHtml(school)}</span>
+                <span style="background:var(--purple-light); color:var(--purple); font-weight:800; padding:2px 10px; border-radius:99px; font-size:0.8rem;">${count}</span>
+            `;
+            row.addEventListener('click', () => {
+                this.DOM.selectSchoolFilter.value = this.DOM.selectSchoolFilter.value === school ? '' : school;
+                this.handleFilterChange();
+                this.switchTab('agenda');
             });
-            if (currentObj && set.has(currentObj)) sel.value = currentObj;
+            this.DOM.schoolsListContainer.appendChild(row);
+        });
+    }
+
+    // ---- Ações dos Cards & UPDATE Padronizado ----
+    async handleCardActionClick(e) {
+        const btn = e.target.closest('[data-action]');
+        if (!btn) return;
+
+        const action = btn.dataset.action;
+        const targetId = btn.dataset.id;
+        const targetDate = btn.dataset.date || this.selectedDate;
+
+        const currentList = this.getSchedulesForDate(targetDate);
+        const item = currentList.find(s => String(s.id) === String(targetId)) || this.schedules.find(s => String(s.id) === String(targetId));
+        if (!item) return;
+
+        if (action === 'progress') {
+            const concrete = this.ensureConcreteSchedule(item, targetDate);
+            const step = btn.dataset.step;
+            const timeFieldMap = {
+                BUSCADO_ESCOLA: 'step_escola_time', ENTREGUE_ONG: 'step_ong_time',
+                SAIDA_ONG: 'step_saida_time', DEVOLVIDO_ESCOLA: 'step_devolvido_time'
+            };
+            const gpsFieldMap = {
+                BUSCADO_ESCOLA: 'step_escola_gps', ENTREGUE_ONG: 'step_ong_gps',
+                SAIDA_ONG: 'step_saida_gps', DEVOLVIDO_ESCOLA: 'step_devolvido_gps'
+            };
+
+            const tField = timeFieldMap[step];
+            const gField = gpsFieldMap[step];
+
+            if (concrete[tField]) {
+                concrete[tField] = '';
+                concrete[gField] = '';
+            } else {
+                concrete[tField] = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                this.showToast('Obtendo localização GPS...', 'info');
+                concrete[gField] = await this.getGpsCoords();
+                this.showToast('Passo registrado com sucesso!');
+            }
+
+            this.recomputeStatus(concrete);
+            this.saveAllLocalState();
+            this.renderAll();
+            await this.saveScheduleToSupabase(concrete);
+        } else if (action === 'cancel') {
+            const concrete = this.ensureConcreteSchedule(item, targetDate);
+            if (concrete.status === 'CANCELADO') {
+                concrete.status = '';
+                concrete.cancel_reason = '';
+                concrete.cancel_time = '';
+                concrete.cancel_gps = '';
+                this.recomputeStatus(concrete);
+            } else {
+                const reason = prompt(`Motivo do cancelamento de ${item.patient_name}:`);
+                if (!reason || !reason.trim()) return;
+                concrete.status = 'CANCELADO';
+                concrete.cancel_reason = reason.trim();
+                concrete.cancel_time = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                this.showToast('Obtendo localização GPS...', 'info');
+                concrete.cancel_gps = await this.getGpsCoords();
+            }
+
+            this.saveAllLocalState();
+            this.renderAll();
+            await this.saveScheduleToSupabase(concrete);
+        } else if (action === 'edit') {
+            this.openDrawer('edit', targetId);
+        } else if (action === 'delete') {
+            if (!this.requireAdmin('excluir agendamentos')) return;
+
+            const isConcreteInstance = (item.start_date === targetDate || item.override_date === targetDate) && String(item.id).includes('_inst_');
+            const deleteScopeText = isConcreteInstance 
+                ? `Deseja excluir a ocorrência de <strong>${this.escapeHtml(item.patient_name)}</strong> do dia <strong>${this.formatDateBR(targetDate)}</strong>?`
+                : `Deseja excluir o agendamento de <strong>${this.escapeHtml(item.patient_name)}</strong>?`;
+
+            this.showConfirmModal({
+                title: 'Excluir Agendamento',
+                text: deleteScopeText,
+                onConfirm: async () => {
+                    const targetIdStr = String(item.id);
+
+                    // Exclusão cirúrgica por ID exato
+                    this.schedules = this.schedules.filter(s => String(s.id) !== targetIdStr);
+
+                    if (!this.pendingDeletions) this.pendingDeletions = [];
+                    this.pendingDeletions.push(item.id);
+
+                    if (!this.pendingRemoteDeletions) this.pendingRemoteDeletions = [];
+                    this.pendingRemoteDeletions.push({ id: item.id });
+
+                    this.dirtyIds.delete(targetIdStr);
+                    this.saveAllLocalState();
+                    this.renderAll();
+                    this.showToast('Agendamento excluído com sucesso!');
+
+                    await this.deleteScheduleFromSupabase(item.id);
+                }
+            });
+        } else if (action === 'audit-gps') {
+            this.openGpsModal(item, targetDate);
+        }
+    }
+
+    // UPDATE: Alteração de monitora padronizada com instância concreta
+    async handleCardMonitorChange(e) {
+        const select = e.target.closest('.card-monitor-select');
+        if (!select) return;
+
+        const targetId = select.dataset.id;
+        const targetDate = select.dataset.date || this.selectedDate;
+
+        const currentList = this.getSchedulesForDate(targetDate);
+        const item = currentList.find(s => String(s.id) === String(targetId)) || this.schedules.find(s => String(s.id) === String(targetId));
+        if (!item) return;
+
+        const concrete = this.ensureConcreteSchedule(item, targetDate);
+        concrete.assigned_monitor = select.value;
+        this.dirtyIds.add(String(concrete.id));
+        this.saveAllLocalState();
+        this.renderAll();
+        await this.saveScheduleToSupabase(concrete);
+    }
+
+    // ---- Drawer Form & Modais ----
+    openDrawer(mode = 'create', id = null) {
+        if (!this.requireAdmin(mode === 'edit' ? 'editar agendamentos' : 'criar agendamentos')) return;
+
+        this.DOM.drawerBackdrop.classList.add('active');
+        this.DOM.drawerSheet.classList.add('active');
+        this.DOM.scheduleForm.reset();
+        this.DOM.fieldScheduleId.value = '';
+
+        if (mode === 'edit' && id) {
+            this.DOM.drawerTitle.textContent = 'Editar Agendamento';
+            const item = this.getSchedulesForDate(this.selectedDate).find(s => String(s.id) === String(id)) || this.schedules.find(s => String(s.id) === String(id));
+            if (item) {
+                this.DOM.fieldScheduleId.value = item.id;
+                this.DOM.fieldProfessional.value = item.professional_name || '';
+                this.DOM.fieldTherapy.value = item.therapy_type || '';
+                this.DOM.fieldPatient.value = item.patient_name || '';
+                this.DOM.fieldStartDate.value = item.start_date || this.selectedDate;
+                this.DOM.fieldStartTime.value = item.start_time || '';
+                this.DOM.fieldEndTime.value = item.end_time || '';
+                
+                if (item.school_name) {
+                    const exists = Array.from(this.DOM.fieldSchool.options).some(opt => opt.value === item.school_name);
+                    if (!exists) {
+                        const opt = document.createElement('option');
+                        opt.value = item.school_name;
+                        opt.textContent = item.school_name;
+                        this.DOM.fieldSchool.appendChild(opt);
+                    }
+                }
+                this.DOM.fieldSchool.value = item.school_name || '';
+                this.DOM.fieldPhone.value = item.phone || '';
+                this.DOM.fieldTransport.value = item.transport_type || 'Ambos';
+                this.DOM.fieldNotes.value = item.notes || '';
+            }
+        } else {
+            this.DOM.drawerTitle.textContent = 'Novo Agendamento TEA';
+            this.DOM.fieldStartDate.value = this.selectedDate;
+        }
+    }
+
+    closeDrawer() {
+        this.DOM.drawerBackdrop.classList.remove('active');
+        this.DOM.drawerSheet.classList.remove('active');
+    }
+
+    // CREATE & UPDATE: Tratamento com validação de duplicidade e instâncias concretas
+    async handleFormSubmit(e) {
+        e.preventDefault();
+        if (!this.requireAdmin('salvar agendamentos')) return;
+
+        const id = this.DOM.fieldScheduleId.value;
+        const startDate = this.DOM.fieldStartDate.value || this.selectedDate;
+        const startTime = this.DOM.fieldStartTime.value;
+        const endTime = this.DOM.fieldEndTime.value;
+        const hour = parseInt(startTime.split(':')[0], 10) || 8;
+        const shift = hour >= 12 ? 'Tarde' : 'Manhã';
+
+        const payloadData = {
+            patient_name: this.fixText(this.DOM.fieldPatient.value),
+            professional_name: this.fixText(this.DOM.fieldProfessional.value),
+            therapy_type: this.fixText(this.DOM.fieldTherapy.value),
+            school_name: this.fixText(this.DOM.fieldSchool.value),
+            phone: this.fixText(this.DOM.fieldPhone.value),
+            transport_type: this.fixText(this.DOM.fieldTransport.value),
+            notes: this.fixText(this.DOM.fieldNotes.value),
+            start_time: startTime,
+            end_time: endTime,
+            shift: shift,
+            start_date: startDate,
+            day_of_week: this.getWeekday(startDate)
         };
 
-        sortAndPopulate(profs, DOM.fProf);
-        sortAndPopulate(escolas, DOM.fEscola);
-    }
+        const patientNorm = this.normalizeText(payloadData.patient_name);
+        if (this.pendingDeletions && id) {
+            this.pendingDeletions = this.pendingDeletions.filter(i => String(i) !== String(id));
+        }
 
-    // ---- 12. Autenticação & Modo Coordenador ----
-    const btnAdminLogin = document.getElementById('btnAdminLogin');
-    const btnAdminLogout = document.getElementById('btnAdminLogout');
-    if (btnAdminLogin) {
-        btnAdminLogin.addEventListener('click', async () => {
-            const senha = prompt("Acesso Coordenador (Senha):");
-            if (!senha) return;
-            if (await validateAdminPasscode(senha)) {
-                document.body.classList.remove('viewer-mode');
-                btnAdminLogin.classList.add('hidden');
-                btnAdminLogout.classList.remove('hidden');
-                sessionStorage.setItem('isAdmin', 'true');
-            } else { alert("Senha incorreta!"); }
-        });
-    }
-    if (btnAdminLogout) {
-        btnAdminLogout.addEventListener('click', () => {
-            document.body.classList.add('viewer-mode');
-            btnAdminLogin.classList.remove('hidden');
-            btnAdminLogout.classList.add('hidden');
-            sessionStorage.removeItem('isAdmin');
-        });
-    }
-    if (sessionStorage.getItem('isAdmin') === 'true') {
-        document.body.classList.remove('viewer-mode');
-        if (btnAdminLogin) btnAdminLogin.classList.add('hidden');
-        if (btnAdminLogout) btnAdminLogout.classList.remove('hidden');
-    }
-
-    // ---- 13. Gerador de Relatórios PDF ----
-    if (DOM.btnGenerateReport) {
-        DOM.btnGenerateReport.addEventListener('click', () => {
-            if (!requireAdmin('gerar relatórios')) return;
-            const start = DOM.reportStartDate?.value;
-            const end = DOM.reportEndDate?.value;
-            if (!start || !end || start > end) { showToast('Informe o período corretamente.', 'error'); return; }
-            
-            const startParts = start.split('-');
-            const endParts = end.split('-');
-            const startDt = new Date(parseInt(startParts[0], 10), parseInt(startParts[1], 10) - 1, parseInt(startParts[2], 10));
-            const endDt = new Date(parseInt(endParts[0], 10), parseInt(endParts[1], 10) - 1, parseInt(endParts[2], 10));
-            
-            const allPeriodRecords = [];
-            const curr = new Date(startDt);
-            
-            while (curr <= endDt) {
-                const y = curr.getFullYear();
-                const m = String(curr.getMonth() + 1).padStart(2, '0');
-                const d = String(curr.getDate()).padStart(2, '0');
-                const dateStr = `${y}-${m}-${d}`;
-
-                const dayRecords = getAppointmentsForDate(dateStr);
-                dayRecords.forEach(rec => {
-                    allPeriodRecords.push({ ...rec, reportDate: dateStr });
-                });
-                curr.setDate(curr.getDate() + 1);
+        if (id) {
+            let item = this.schedules.find(s => String(s.id) === String(id));
+            if (!item) {
+                item = this.getSchedulesForDate(this.selectedDate).find(s => String(s.id) === String(id));
             }
-            
-            const reportWin = window.open('', '_blank');
-            const rowsHtml = allPeriodRecords.map(r => `
-                <tr>
-                    <td style="padding:6px; border:1px solid #ccc;">${formatDateBR(r.reportDate)}</td>
-                    <td style="padding:6px; border:1px solid #ccc;">${escapeHtml(r.paciente)}</td>
-                    <td style="padding:6px; border:1px solid #ccc;">${escapeHtml(r.profissional)} (${escapeHtml(r.tipo)})</td>
-                    <td style="padding:6px; border:1px solid #ccc;">${escapeHtml(r.inicio)} - ${escapeHtml(r.termino)} (${escapeHtml(r.turno)})</td>
-                    <td style="padding:6px; border:1px solid #ccc;">${escapeHtml(r.escola)}</td>
-                    <td style="padding:6px; border:1px solid #ccc;">${escapeHtml(r.monitora || 'Não atribuída')}</td>
-                    <td style="padding:6px; border:1px solid #ccc;">${r.status === 'CANCELADO' ? 'Cancelado' : (r.status ? 'Em Andamento/Concluído' : 'Aguardando')}</td>
-                </tr>
-            `).join('');
 
-            reportWin.document.write(`
-                <html>
-                <head>
-                    <title>Relatório Novo Olhar (TEA)</title>
-                    <style>
-                        body { font-family: sans-serif; padding: 20px; color: #333; }
-                        h1 { color: #1e40af; font-size: 1.4rem; margin-bottom: 4px; }
-                        p { font-size: 0.9rem; color: #666; margin-bottom: 16px; }
-                        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-                        th { background: #f1f5f9; padding: 8px; border: 1px solid #ccc; text-align: left; }
-                    </style>
-                </head>
-                <body>
-                    <h1>Relatório de Atendimentos Transporte Especial TEA</h1>
-                    <p>Período: <strong>${formatDateBR(start)}</strong> a <strong>${formatDateBR(end)}</strong> &bull; Total de Atendimentos no Período: <strong>${allPeriodRecords.length}</strong></p>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Data</th>
-                                <th>Paciente</th>
-                                <th>Profissional / Atendimento</th>
-                                <th>Horário (Turno)</th>
-                                <th>Instituição</th>
-                                <th>Monitora</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${rowsHtml.length > 0 ? rowsHtml : '<tr><td colspan="7" style="text-align:center; padding:12px;">Nenhum atendimento encontrado no período.</td></tr>'}
-                        </tbody>
-                    </table>
-                    <script>window.print();<\/script>
-                </body>
-                </html>
-            `);
-            reportWin.document.close();
-        });
-    }
+            if (item) {
+                // UPDATE com instância concreta padronizada para a data selecionada
+                const concrete = this.ensureConcreteSchedule(item, this.selectedDate);
+                Object.assign(concrete, payloadData);
+                this.recomputeStatus(concrete);
+                this.dirtyIds.add(String(concrete.id));
+                this.saveAllLocalState();
+                this.renderAll();
+                this.closeDrawer();
+                this.showToast('Agendamento atualizado com sucesso!');
+                await this.saveScheduleToSupabase(concrete);
+            }
+        } else {
+            // CREATE: Verificação de duplicidade exata na data
+            const duplicate = this.schedules.find(s => 
+                (s.start_date === startDate || s.override_date === startDate) &&
+                this.normalizeText(s.patient_name) === patientNorm &&
+                this.normalizeText(s.professional_name) === this.normalizeText(payloadData.professional_name) &&
+                (s.start_time || '').trim() === (startTime || '').trim()
+            );
 
-    // ---- 13.1 Importador de Planilha (XLSX / CSV) ----
-    if (DOM.btnImportExcel && DOM.excelImportInput) {
-        DOM.btnImportExcel.addEventListener('click', () => {
-            if (!requireAdmin('importar planilhas')) return;
-            DOM.excelImportInput.click();
-        });
-
-        DOM.excelImportInput.addEventListener('change', (e) => {
-            const file = e.target.files?.[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = async (evt) => {
-                try {
-                    const data = new Uint8Array(evt.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                    const jsonRows = XLSX.utils.sheet_to_json(firstSheet);
-
-                    if (!jsonRows || jsonRows.length === 0) {
-                        showToast('A planilha selecionada está vazia.', 'error');
-                        return;
-                    }
-
-                    const importedRecords = [];
-                    jsonRows.forEach(row => {
-                        const pVal = row.Profissional || row.profissional || row.PROFISSIONAL || '';
-                        const pacVal = row.Paciente || row.paciente || row.PACIENTE || '';
-                        const tVal = row.Atendimento || row.atendimento || row.Tipo || row.tipo || '';
-                        const escVal = row.Instituição || row.Instituicao || row.escola || row.ESCOLA || '';
-                        const telVal = row.Telefone || row.telefone || '';
-                        const transpVal = row.Transporte || row.transporte || 'Ambos';
-                        const obsVal = row.Obs || row.obs || row.Observações || '';
-                        const fInicio = row.Início || row.Inicio || row.inicio || '08:00';
-                        const fTermino = row.Término || row.Termino || row.termino || '09:00';
-                        const dataVal = parseExcelDate(row.Data || row.data);
-
-                        if (pacVal && pVal) {
-                            const horaInicio = parseInt(String(fInicio).split(':')[0], 10) || 8;
-                            const turnoCalculado = horaInicio >= 12 ? 'Tarde' : 'Manhã';
-                            const rec = {
-                                id: `${Date.now()}_imp_${Math.random().toString(36).substr(2, 5)}`,
-                                data: dataVal,
-                                dataFim: '',
-                                profissional: fixTextEncoding(pVal),
-                                tipo: fixTextEncoding(tVal),
-                                paciente: fixTextEncoding(pacVal),
-                                dia: getWeekdayFromISO(dataVal),
-                                turno: turnoCalculado,
-                                inicio: String(fInicio).substring(0, 5),
-                                termino: String(fTermino).substring(0, 5),
-                                escola: fixTextEncoding(escVal),
-                                telefone: fixTextEncoding(telVal),
-                                transporte: fixTextEncoding(transpVal),
-                                obs: fixTextEncoding(obsVal),
-                                status: '',
-                                monitora: '',
-                                isProjected: false,
-                                _updatedAt: Date.now()
-                            };
-                            importedRecords.push(rec);
-                            appointments.push(rec);
-                        }
-                    });
-
-                    if (importedRecords.length > 0) {
-                        saveLocalState();
-                        updateFilterOptions();
-                        render();
-                        showToast(`${importedRecords.length} agendamento(s) importado(s) com sucesso!`);
-                        await supabaseCreateAppointments(importedRecords);
-                    } else {
-                        showToast('Nenhum agendamento válido encontrado na planilha.', 'info');
-                    }
-                } catch (err) {
-                    console.error('Erro ao ler arquivo Excel:', err);
-                    showToast('Falha ao processar o arquivo Excel/CSV.', 'error');
-                } finally {
-                    DOM.excelImportInput.value = '';
+            if (duplicate) {
+                if (!confirm('Já existe um agendamento para este paciente no mesmo horário e data. Deseja atualizar o registro existente?')) {
+                    return;
                 }
+                Object.assign(duplicate, payloadData);
+                this.recomputeStatus(duplicate);
+                this.dirtyIds.add(String(duplicate.id));
+                this.saveAllLocalState();
+                this.renderAll();
+                this.closeDrawer();
+                this.showToast('Agendamento existente atualizado!');
+                await this.saveScheduleToSupabase(duplicate);
+                return;
+            }
+
+            const newSchedule = {
+                id: `${Date.now()}_rec_${Math.random().toString(36).substring(2, 6)}`,
+                ...payloadData
             };
-            reader.readAsArrayBuffer(file);
+            this.dirtyIds.add(String(newSchedule.id));
+            this.schedules.push(newSchedule);
+            this.saveAllLocalState();
+            this.renderAll();
+            this.closeDrawer();
+            this.showToast('Novo agendamento recorrente salvo!');
+            await this.saveScheduleToSupabase(newSchedule);
+        }
+    }
+
+    openGpsModal(item, dateStr) {
+        this.DOM.gpsModalAvatar.textContent = this.getInitials(item.patient_name);
+        this.DOM.gpsModalPatientName.textContent = item.patient_name;
+        this.DOM.gpsModalDateLabel.textContent = this.formatDateBR(dateStr);
+
+        const isCancelled = item.status === 'CANCELADO';
+        if (isCancelled) {
+            this.DOM.gpsModalStatusBadge.textContent = 'Cancelado';
+            this.DOM.gpsModalStatusBadge.className = 'status-chip danger';
+        } else {
+            this.DOM.gpsModalStatusBadge.textContent = 'Em Andamento/Concluído';
+            this.DOM.gpsModalStatusBadge.className = 'status-chip';
+        }
+
+        const steps = [
+            { label: 'Escola', icon: 'ph-buildings', time: item.step_escola_time, gps: item.step_escola_gps },
+            { label: 'ONG', icon: 'ph-house-line', time: item.step_ong_time, gps: item.step_ong_gps },
+            { label: 'Saída ONG', icon: 'ph-sign-out', time: item.step_saida_time, gps: item.step_saida_gps },
+            { label: 'Devolvido', icon: 'ph-graduation-cap', time: item.step_devolvido_time, gps: item.step_devolvido_gps }
+        ];
+
+        let html = '';
+        steps.forEach(s => {
+            if (s.time) {
+                const coords = this.extractCoords(s.gps);
+                const mapsUrl = coords ? `https://www.google.com/maps?q=${coords}` : null;
+                html += `
+                    <div class="schedule-card mb-2" style="border-left: 3px solid var(--primary);">
+                        <div class="flex-between font-bold">
+                            <span><i class="ph ${s.icon} text-blue"></i> ${this.escapeHtml(s.label)}</span>
+                            <span class="time-badge">${this.escapeHtml(s.time)}</span>
+                        </div>
+                        ${mapsUrl ? `<a href="${mapsUrl}" target="_blank" class="btn-submit mt-2" style="height:32px; font-size:0.78rem;"><i class="ph ph-map-pin"></i> Ver Local no Google Maps</a>` : ''}
+                    </div>
+                `;
+            }
         });
+
+        if (isCancelled) {
+            const coords = this.extractCoords(item.cancel_gps);
+            const mapsUrl = coords ? `https://www.google.com/maps?q=${coords}` : null;
+            html += `
+                <div class="schedule-card mb-2" style="border-left: 3px solid var(--danger); background: var(--danger-light);">
+                    <div class="flex-between font-bold" style="color:var(--danger);">
+                        <span><i class="ph ph-ban"></i> Cancelado</span>
+                        ${item.cancel_time ? `<span class="time-badge" style="background:var(--danger); color:#fff;">${this.escapeHtml(item.cancel_time)}</span>` : ''}
+                    </div>
+                    ${item.cancel_reason ? `<div class="font-bold text-sm mt-1">Motivo: "${this.escapeHtml(item.cancel_reason)}"</div>` : ''}
+                    ${mapsUrl ? `<a href="${mapsUrl}" target="_blank" class="btn-submit mt-2" style="background:var(--danger); height:32px; font-size:0.78rem;"><i class="ph ph-map-pin"></i> Ver Local no Google Maps</a>` : ''}
+                </div>
+            `;
+        }
+
+        this.DOM.gpsModalTimelineBody.innerHTML = html || '<div class="text-center text-muted font-bold py-6">Nenhum evento gravado.</div>';
+        this.DOM.gpsModalBackdrop.classList.add('active');
+        this.DOM.gpsModal.classList.add('active');
     }
 
-    // ---- 14. Relógio ao Vivo & Inicialização Resiliente ----
-    const liveClockEl = document.getElementById('liveClock');
-    function updateClock() {
-        if (!liveClockEl) return;
-        const now = new Date();
-        liveClockEl.textContent = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    closeGpsModal() {
+        this.DOM.gpsModalBackdrop.classList.remove('active');
+        this.DOM.gpsModal.classList.remove('active');
     }
-    setInterval(updateClock, 1000); updateClock();
 
-    updateFilterOptions();
-    render();
+    showConfirmModal({ title, text, onConfirm }) {
+        this.DOM.confirmModalTitle.textContent = title;
+        this.DOM.confirmModalText.innerHTML = text;
+        this.confirmCallback = onConfirm;
+        this.DOM.confirmModalBackdrop.classList.add('active');
+        this.DOM.confirmModal.classList.add('active');
+    }
 
-    loadData(false);
-    loadMonitors();
+    closeConfirmModal() {
+        this.DOM.confirmModalBackdrop.classList.remove('active');
+        this.DOM.confirmModal.classList.remove('active');
+        this.confirmCallback = null;
+    }
 
-    setInterval(() => {
-        if (isBackgroundSyncPaused()) return;
-        loadData(true); loadMonitors(true);
-    }, 6000);
+    // ---- CREATE/DELETE: Monitoras com Validação de Duplicidade ----
+    addMonitor() {
+        if (!this.requireAdmin('adicionar monitora')) return;
+        const name = this.fixText(this.DOM.inputNewMonitor.value);
+        if (!name) return;
+
+        const exists = this.monitors.some(m => this.normalizeText(m) === this.normalizeText(name));
+        if (exists) {
+            this.showToast('Esta monitora já está cadastrada.', 'error');
+            return;
+        }
+
+        this.monitors.push(name);
+        this.DOM.inputNewMonitor.value = '';
+        this.saveAllLocalState();
+        this.renderAll();
+        this.showToast(`Monitora "${name}" adicionada com sucesso!`);
+        this.saveMonitorToSupabase(name);
+    }
+
+    removeMonitor(index) {
+        if (!this.requireAdmin('remover monitora')) return;
+        const name = this.monitors[index];
+        this.monitors.splice(index, 1);
+        this.saveAllLocalState();
+        this.renderAll();
+        this.showToast(`Monitora "${name}" removida.`);
+        this.deleteMonitorFromSupabase(name);
+    }
+
+    // ---- CREATE em Lote: Importação Excel Otimizada ----
+    handleExcelImport(e) {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (evt) => {
+            try {
+                const data = new Uint8Array(evt.target.result);
+                const wb = XLSX.read(data, { type: 'array' });
+                const sheet = wb.Sheets[wb.SheetNames[0]];
+                const rows = XLSX.utils.sheet_to_json(sheet);
+
+                if (!rows || rows.length === 0) {
+                    this.showToast('Planilha vazia.', 'error');
+                    return;
+                }
+
+                const imported = [];
+                rows.forEach(r => {
+                    const patient = r.Paciente || r.paciente || r.PACIENTE;
+                    const prof = r.Profissional || r.profissional || r.PROFISSIONAL;
+                    const therapy = r.Atendimento || r.atendimento || r.Tipo || r.tipo || 'Terapia';
+                    const school = r.Instituição || r.Instituicao || r.escola || '';
+                    const phone = r.Telefone || r.telefone || '';
+                    const transp = r.Transporte || r.transporte || 'Ambos';
+                    const notes = r.Obs || r.obs || '';
+                    const startTime = String(r.Início || r.Inicio || r.inicio || '08:00').substring(0, 5);
+                    const endTime = String(r.Término || r.Termino || r.termino || '09:00').substring(0, 5);
+                    const dateVal = this.parseExcelDate(r.Data || r.data);
+
+                    if (patient && prof) {
+                        const hour = parseInt(startTime.split(':')[0], 10) || 8;
+                        const shift = hour >= 12 ? 'Tarde' : 'Manhã';
+
+                        const item = {
+                            id: `${Date.now()}_imp_${Math.random().toString(36).substring(2, 6)}`,
+                            patient_name: this.fixText(patient),
+                            professional_name: this.fixText(prof),
+                            therapy_type: this.fixText(therapy),
+                            school_name: this.fixText(school),
+                            phone: this.fixText(phone),
+                            transport_type: this.fixText(transp),
+                            notes: this.fixText(notes),
+                            start_time: startTime,
+                            end_time: endTime,
+                            shift: shift,
+                            start_date: dateVal,
+                            day_of_week: this.getWeekday(dateVal)
+                        };
+                        imported.push(item);
+                        this.dirtyIds.add(String(item.id));
+                        this.schedules.push(item);
+                    }
+                });
+
+                if (imported.length > 0) {
+                    this.saveAllLocalState();
+                    this.renderAll();
+                    this.showToast(`${imported.length} agendamento(s) importado(s)!`);
+                    await this.saveBatchSchedulesToSupabase(imported);
+                } else {
+                    this.showToast('Nenhum registro válido encontrado.', 'info');
+                }
+            } catch(err) {
+                console.error(err);
+                this.showToast('Falha ao ler arquivo Excel.', 'error');
+            } finally {
+                this.DOM.inputExcelFile.value = '';
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    handlePdfReport() {
+        if (!this.requireAdmin('gerar relatórios')) return;
+        const start = this.DOM.reportStartDate.value;
+        const end = this.DOM.reportEndDate.value;
+
+        if (!start || !end || start > end) {
+            this.showToast('Período de datas inválido.', 'error');
+            return;
+        }
+
+        const [sy, sm, sd] = start.split('-');
+        const [ey, em, ed] = end.split('-');
+        const curr = new Date(parseInt(sy, 10), parseInt(sm, 10) - 1, parseInt(sd, 10));
+        const endDt = new Date(parseInt(ey, 10), parseInt(em, 10) - 1, parseInt(ed, 10));
+
+        const records = [];
+        while (curr <= endDt) {
+            const y = curr.getFullYear();
+            const m = String(curr.getMonth() + 1).padStart(2, '0');
+            const d = String(curr.getDate()).padStart(2, '0');
+            const dateStr = `${y}-${m}-${d}`;
+
+            const dayList = this.getSchedulesForDate(dateStr);
+            dayList.forEach(rec => records.push({ ...rec, rDate: dateStr }));
+            curr.setDate(curr.getDate() + 1);
+        }
+
+        const rows = records.map(r => `
+            <tr>
+                <td style="padding:6px; border:1px solid #ccc;">${this.formatDateBR(r.rDate)}</td>
+                <td style="padding:6px; border:1px solid #ccc;">${this.escapeHtml(r.patient_name)}</td>
+                <td style="padding:6px; border:1px solid #ccc;">${this.escapeHtml(r.professional_name)} (${this.escapeHtml(r.therapy_type)})</td>
+                <td style="padding:6px; border:1px solid #ccc;">${this.escapeHtml(r.start_time)} - ${this.escapeHtml(r.end_time)} (${this.escapeHtml(r.shift)})</td>
+                <td style="padding:6px; border:1px solid #ccc;">${this.escapeHtml(r.school_name)}</td>
+                <td style="padding:6px; border:1px solid #ccc;">${this.escapeHtml(r.assigned_monitor || 'Não atribuída')}</td>
+                <td style="padding:6px; border:1px solid #ccc;">${r.status === 'CANCELADO' ? 'Cancelado' : 'Concluído/Em Transporte'}</td>
+            </tr>
+        `).join('');
+
+        const win = window.open('', '_blank');
+        win.document.write(`
+            <html>
+            <head>
+                <title>Relatório Transporte TEA</title>
+                <style>
+                    body { font-family: sans-serif; padding: 20px; }
+                    h1 { color: #1e40af; font-size: 1.4rem; }
+                    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 10px; }
+                    th { background: #f1f5f9; padding: 8px; border: 1px solid #ccc; text-align: left; }
+                </style>
+            </head>
+            <body>
+                <h1>Relatório de Atendimentos Transporte Especial TEA</h1>
+                <p>Período: <strong>${this.formatDateBR(start)}</strong> a <strong>${this.formatDateBR(end)}</strong> &bull; Total: <strong>${records.length}</strong></p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Data</th><th>Paciente</th><th>Profissional</th><th>Horário</th><th>Instituição</th><th>Monitora</th><th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows || '<tr><td colspan="7" style="text-align:center; padding:10px;">Nenhum registro.</td></tr>'}</tbody>
+                </table>
+                <script>window.print();<\/script>
+            </body>
+            </html>
+        `);
+        win.document.close();
+    }
+
+    // ---- Sincronização & Persistência com Supabase ----
+    async supabaseFetch(endpoint, options = {}) {
+        const response = await fetch(`${this.SUPABASE_URL}/rest/v1/${endpoint}`, {
+            mode: 'cors', cache: 'no-store', ...options,
+            headers: {
+                apikey: this.SUPABASE_KEY,
+                Authorization: `Bearer ${this.SUPABASE_KEY}`,
+                'Content-Type': 'application/json',
+                ...(options.headers || {})
+            }
+        });
+        const text = await response.text();
+        let json = text ? JSON.parse(text) : null;
+        if (!response.ok) throw new Error(json?.message || `HTTP ${response.status}`);
+        return json;
+    }
+
+    async flushPendingSync() {
+        if (!navigator.onLine) return;
+
+        // 1. Processar exclusões pendentes
+        if (this.pendingRemoteDeletions && this.pendingRemoteDeletions.length > 0) {
+            const queue = [...this.pendingRemoteDeletions];
+            const remaining = [];
+            for (const item of queue) {
+                try {
+                    if (item.id) {
+                        await this.supabaseFetch(`appointments?id=eq.${encodeURIComponent(item.id)}`, { method: 'DELETE' });
+                    }
+                } catch(e) {
+                    remaining.push(item);
+                }
+            }
+            this.pendingRemoteDeletions = remaining;
+            this.saveLocalStore('lumina_pending_remote_deletions_store', this.pendingRemoteDeletions);
+        }
+
+        // 2. Processar upserts pendentes
+        if (this.pendingSync && this.pendingSync.length > 0) {
+            const queue = [...this.pendingSync];
+            const remaining = [];
+            for (const item of queue) {
+                try {
+                    const payload = this.toSupabaseFormat(item);
+                    await this.supabaseFetch('appointments?on_conflict=id', {
+                        method: 'POST',
+                        headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+                        body: JSON.stringify(payload)
+                    });
+                    this.dirtyIds.delete(String(item.id));
+                } catch(e) {
+                    remaining.push(item);
+                }
+            }
+            this.pendingSync = remaining;
+            this.saveLocalStore('lumina_pending_sync_store', this.pendingSync);
+        }
+    }
+
+    async syncFromSupabase() {
+        if (!navigator.onLine) return;
+
+        await this.flushPendingSync();
+
+        try {
+            const rawData = await this.supabaseFetch('appointments?select=*&order=data.asc&limit=10000');
+            if (Array.isArray(rawData) && rawData.length > 0) {
+                const deletedIds = new Set(this.pendingDeletions || []);
+
+                const remoteItems = rawData
+                    .map(r => this.fromSupabaseFormat(r))
+                    .filter(r => !deletedIds.has(String(r.id || '')));
+
+                const map = new Map();
+
+                remoteItems.forEach(r => {
+                    const idStr = String(r.id || '');
+                    if (!this.dirtyIds.has(idStr)) {
+                        map.set(idStr, r);
+                    }
+                });
+
+                this.schedules.forEach(l => {
+                    const idStr = String(l.id || '');
+                    if (!deletedIds.has(idStr)) {
+                        if (this.dirtyIds.has(idStr) || !map.has(idStr)) {
+                            map.set(idStr, l);
+                        }
+                    }
+                });
+
+                this.schedules = Array.from(map.values());
+                this.saveAllLocalState();
+                this.renderAll();
+            }
+
+            const remoteMonitors = await this.supabaseFetch('monitors?select=*');
+            if (Array.isArray(remoteMonitors) && remoteMonitors.length > 0) {
+                const names = remoteMonitors.map(m => m.monitora || m.name).filter(Boolean);
+                if (names.length > 0) {
+                    this.monitors = Array.from(new Set([...this.monitors, ...names]));
+                    this.saveAllLocalState();
+                    this.renderMonitorsList();
+                }
+            }
+        } catch(e) {}
+    }
+
+    async saveScheduleToSupabase(item) {
+        this.dirtyIds.add(String(item.id));
+        if (!navigator.onLine) {
+            if (!this.pendingSync.some(p => String(p.id) === String(item.id))) {
+                this.pendingSync.push(item);
+                this.saveLocalStore('lumina_pending_sync_store', this.pendingSync);
+            }
+            return;
+        }
+        try {
+            const payload = this.toSupabaseFormat(item);
+            await this.supabaseFetch('appointments?on_conflict=id', {
+                method: 'POST',
+                headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+                body: JSON.stringify(payload)
+            });
+            this.dirtyIds.delete(String(item.id));
+            this.pendingSync = this.pendingSync.filter(p => String(p.id) !== String(item.id));
+            this.saveLocalStore('lumina_pending_sync_store', this.pendingSync);
+        } catch(e) {
+            if (!this.pendingSync.some(p => String(p.id) === String(item.id))) {
+                this.pendingSync.push(item);
+                this.saveLocalStore('lumina_pending_sync_store', this.pendingSync);
+            }
+        }
+    }
+
+    async saveBatchSchedulesToSupabase(items) {
+        if (!navigator.onLine || !Array.isArray(items) || items.length === 0) return;
+        try {
+            const payloads = items.map(item => this.toSupabaseFormat(item));
+            for (let i = 0; i < payloads.length; i += 100) {
+                const chunk = payloads.slice(i, i + 100);
+                await this.supabaseFetch('appointments?on_conflict=id', {
+                    method: 'POST',
+                    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+                    body: JSON.stringify(chunk)
+                });
+            }
+            items.forEach(it => this.dirtyIds.delete(String(it.id)));
+        } catch(e) {
+            console.error('Falha no salvamento em lote:', e);
+        }
+    }
+
+    async deleteScheduleFromSupabase(id) {
+        if (!id) return;
+        const task = { id };
+        if (!this.pendingRemoteDeletions) this.pendingRemoteDeletions = [];
+
+        if (!navigator.onLine) {
+            if (!this.pendingRemoteDeletions.some(t => t.id === id)) {
+                this.pendingRemoteDeletions.push(task);
+                this.saveLocalStore('lumina_pending_remote_deletions_store', this.pendingRemoteDeletions);
+            }
+            return;
+        }
+
+        try {
+            await this.supabaseFetch(`appointments?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
+            this.pendingRemoteDeletions = this.pendingRemoteDeletions.filter(t => t.id !== id);
+            this.pendingDeletions = (this.pendingDeletions || []).filter(i => i !== id);
+            this.saveLocalStore('lumina_pending_remote_deletions_store', this.pendingRemoteDeletions);
+            this.saveLocalStore('lumina_pending_deletions_store', this.pendingDeletions);
+        } catch(e) {
+            if (!this.pendingRemoteDeletions.some(t => t.id === id)) {
+                this.pendingRemoteDeletions.push(task);
+                this.saveLocalStore('lumina_pending_remote_deletions_store', this.pendingRemoteDeletions);
+            }
+        }
+    }
+
+    async saveMonitorToSupabase(name) {
+        if (!navigator.onLine) return;
+        try {
+            await this.supabaseFetch('monitors', {
+                method: 'POST',
+                body: JSON.stringify({ id: Date.now().toString(), monitora: name })
+            });
+        } catch(e) {}
+    }
+
+    async deleteMonitorFromSupabase(name) {
+        if (!navigator.onLine) return;
+        try {
+            await this.supabaseFetch(`monitors?monitora=eq.${encodeURIComponent(name)}`, { method: 'DELETE' });
+        } catch(e) {}
+    }
+
+    startBackgroundPoller() {
+        setInterval(() => {
+            if (!document.hidden) this.syncFromSupabase();
+        }, 8000);
+    }
+}
+
+// Inicialização Global
+let app;
+document.addEventListener('DOMContentLoaded', () => {
+    app = new LuminaApp();
 });

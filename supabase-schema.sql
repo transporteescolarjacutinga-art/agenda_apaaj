@@ -1,8 +1,8 @@
 -- ============================================================================
--- LUMINA SCHEDULER PRO - BANCO DE DADOS SUPABASE (TEA)
+-- ESQUEMA ORIGINAL SUPABASE - TABELA PUBLIC.APPOINTMENTS E PUBLIC.MONITORS
 -- ============================================================================
 
--- Tabela de Agendamentos e Ocorrências Diárias
+-- Tabela Principal de Agendamentos e Ocorrências Diárias
 create table if not exists public.appointments (
     id text primary key,
     base_id text default '',
@@ -35,7 +35,7 @@ create table if not exists public.appointments (
     created_at timestamptz default now()
 );
 
--- Colunas garantidas em migração
+-- Garantia de Colunas em Migração
 alter table public.appointments
     add column if not exists base_id text default '',
     add column if not exists data_fim date,
@@ -58,26 +58,25 @@ create table if not exists public.monitors (
     created_at timestamptz default now()
 );
 
--- Políticas de Segurança Row Level Security (RLS)
+-- Habilitar Row Level Security (RLS)
 alter table public.appointments enable row level security;
 alter table public.monitors enable row level security;
 
--- Reset de Políticas de Agendamentos
-drop policy if exists "public appointments read" on public.appointments;
+-- Políticas de Acesso Público Total
+drop policy if exists "public appointments select" on public.appointments;
 drop policy if exists "public appointments insert" on public.appointments;
 drop policy if exists "public appointments update" on public.appointments;
 drop policy if exists "public appointments delete" on public.appointments;
 
-create policy "public appointments read" on public.appointments for select to anon using (true);
+create policy "public appointments select" on public.appointments for select to anon using (true);
 create policy "public appointments insert" on public.appointments for insert to anon with check (true);
 create policy "public appointments update" on public.appointments for update to anon using (true) with check (true);
 create policy "public appointments delete" on public.appointments for delete to anon using (true);
 
--- Reset de Políticas de Monitoras
-drop policy if exists "public monitors read" on public.monitors;
+drop policy if exists "public monitors select" on public.monitors;
 drop policy if exists "public monitors insert" on public.monitors;
 drop policy if exists "public monitors delete" on public.monitors;
 
-create policy "public monitors read" on public.monitors for select to anon using (true);
+create policy "public monitors select" on public.monitors for select to anon using (true);
 create policy "public monitors insert" on public.monitors for insert to anon with check (true);
 create policy "public monitors delete" on public.monitors for delete to anon using (true);
