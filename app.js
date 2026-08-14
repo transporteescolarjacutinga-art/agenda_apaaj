@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
         editScopeGroup: document.getElementById('editScopeGroup'),
         editScope: document.getElementById('editScope'),
         excelImportInput: document.getElementById('excelImportInput'),
+        btnImportExcel: document.getElementById('btnImportExcel'),
         
         fData: document.getElementById('filterDataRef'),
         fProf: document.getElementById('filterProfissional'),
@@ -354,8 +355,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function toSupabaseAppointment(item) {
         const cleanId = String(item.id || '').startsWith('proj_') ? String(item.id).replace(/^proj_/, '').replace(/_\d{4}-\d{2}-\d{2}$/, '') : String(item.id || '');
+        const derivedBaseId = item.baseId || item.base_id || (cleanId.match(/_\d{4}-\d{2}-\d{2}$/) ? cleanId.replace(/_\d{4}-\d{2}-\d{2}$/, '') : cleanId);
         return {
             id: cleanId,
+            base_id: derivedBaseId,
             data: item.data || null,
             data_fim: item.dataFim || item.data_fim || null,
             profissional: fixTextEncoding(item.profissional),
@@ -386,8 +389,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function fromSupabaseAppointment(item) {
+        const rawId = item.id || '';
+        let baseId = item.baseId || item.base_id || '';
+        if (!baseId && rawId) {
+            if (rawId.match(/_\d{4}-\d{2}-\d{2}$/)) {
+                baseId = rawId.replace(/_\d{4}-\d{2}-\d{2}$/, '');
+            } else {
+                baseId = rawId;
+            }
+        }
         return {
-            id: item.id || '',
+            id: rawId,
+            baseId: baseId,
             data: item.data || '',
             dataFim: item.dataFim || item.data_fim || '',
             profissional: fixTextEncoding(item.profissional),
@@ -470,8 +483,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const rawId = String(item.id || '');
         const baseId = item.baseId || (rawId.startsWith('proj_') ? rawId.replace(/^proj_/, '').replace(/_\d{4}-\d{2}-\d{2}$/, '') : rawId);
         const patientClean = (item.paciente || '').trim();
-        const inicioVal = (item.inicio || '').trim();
-        const inicioFormatted = inicioVal.length === 5 ? `${inicioVal}:00` : inicioVal;
 
         const deletePromises = [];
 
@@ -489,21 +500,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     method: 'DELETE', headers: { Prefer: 'return=minimal' }
                 })
             );
-        }
-
-        if (patientClean && item.data && inicioVal) {
             deletePromises.push(
-                supabaseRequest(`${SUPABASE_TABLES.appointments}?paciente=ilike.${encodeURIComponent(patientClean)}&data=eq.${encodeURIComponent(item.data)}&inicio=eq.${encodeURIComponent(inicioVal)}`, {
+                supabaseRequest(`${SUPABASE_TABLES.appointments}?base_id=eq.${encodeURIComponent(baseId)}`, {
                     method: 'DELETE', headers: { Prefer: 'return=minimal' }
                 })
             );
-            if (inicioFormatted !== inicioVal) {
-                deletePromises.push(
-                    supabaseRequest(`${SUPABASE_TABLES.appointments}?paciente=ilike.${encodeURIComponent(patientClean)}&data=eq.${encodeURIComponent(item.data)}&inicio=eq.${encodeURIComponent(inicioFormatted)}`, {
-                        method: 'DELETE', headers: { Prefer: 'return=minimal' }
-                    })
-                );
-            }
+        }
+
+        if (patientClean) {
+            deletePromises.push(
+                supabaseRequest(`${SUPABASE_TABLES.appointments}?paciente=ilike.${encodeURIComponent(patientClean)}`, {
+                    method: 'DELETE', headers: { Prefer: 'return=minimal' }
+                })
+            );
         }
 
         await Promise.allSettled(deletePromises);
@@ -511,37 +520,54 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function mergeAppointments(localList, remoteList) {
         if (!Array.isArray(remoteList)) return localList || [];
-        if (!Array.isArray(localList) || localList.length === 0) return remoteList;
-
-        const remoteMap = new Map();
-        remoteList.forEach(r => remoteMap.set(String(r.id), r));
 
         const deletedSet = new Set();
         deletedIdsQueue.forEach(d => {
-            if (typeof d === 'string') deletedSet.add(d);
-            else if (d && d.id) deletedSet.add(String(d.id));
+            if (typeof d === 'string') {
+                deletedSet.add(d);
+            } else if (d && typeof d === 'object') {
+                if (d.id) deletedSet.add(String(d.id));
+                if (d.baseId) deletedSet.add(String(d.baseId));
+                if (d.paciente) deletedSet.add(normalizeFilterText(d.paciente));
+            }
         });
 
         const mergedMap = new Map();
 
         // 1. Inserir itens remotos (desde que não estejam deletados localmente)
         remoteList.forEach(remoteItem => {
-            const idStr = String(remoteItem.id);
-            if (!deletedSet.has(idStr)) {
+            const idStr = String(remoteItem.id || '');
+            const baseStr = String(remoteItem.baseId || remoteItem.base_id || '');
+            const pacNorm = normalizeFilterText(remoteItem.paciente);
+
+            const isDeleted = deletedSet.has(idStr) ||
+                              (baseStr && deletedSet.has(baseStr)) ||
+                              (pacNorm && deletedSet.has(pacNorm));
+
+            if (!isDeleted) {
                 mergedMap.set(idStr, remoteItem);
             }
         });
 
         // 2. Mesclar itens locais (preservando cadastros recém-criados ou pendentes de sync)
-        localList.forEach(localItem => {
-            const idStr = String(localItem.id);
-            if (deletedSet.has(idStr)) return;
+        if (Array.isArray(localList)) {
+            localList.forEach(localItem => {
+                const idStr = String(localItem.id || '');
+                const baseStr = String(localItem.baseId || localItem.base_id || '');
+                const pacNorm = normalizeFilterText(localItem.paciente);
 
-            const remoteItem = mergedMap.get(idStr);
-            if (!remoteItem || localItem.isPendingSync || (localItem._updatedAt && localItem._updatedAt > (remoteItem._updatedAt || 0))) {
-                mergedMap.set(idStr, localItem);
-            }
-        });
+                const isDeleted = deletedSet.has(idStr) ||
+                                  (baseStr && deletedSet.has(baseStr)) ||
+                                  (pacNorm && deletedSet.has(pacNorm));
+
+                if (isDeleted) return;
+
+                const remoteItem = mergedMap.get(idStr);
+                if (!remoteItem || localItem.isPendingSync || (localItem._updatedAt && localItem._updatedAt > (remoteItem._updatedAt || 0))) {
+                    mergedMap.set(idStr, localItem);
+                }
+            });
+        }
 
         return Array.from(mergedMap.values());
     }
@@ -600,11 +626,27 @@ document.addEventListener('DOMContentLoaded', () => {
             const timeKey = (a.inicio || '').trim();
             const key = `${normalizeFilterText(a.paciente)}|${normalizeFilterText(aWeekday)}|${timeKey}`;
 
+            const rawId = String(a.id || '');
+            const isDerivedConcreteRecord = Boolean(rawId.match(/_\d{4}-\d{2}-\d{2}$/));
+
             if (a.data === dateRef && !a.isProjected) {
-                exactMatches.set(key, a);
+                if (!exactMatches.has(key)) {
+                    exactMatches.set(key, a);
+                } else {
+                    const existing = exactMatches.get(key);
+                    const existingIsSpecific = String(existing.id).includes(`_${dateRef}`) || (existing.baseId && existing.baseId !== existing.id);
+                    const currentIsSpecific = String(a.id).includes(`_${dateRef}`) || (a.baseId && a.baseId !== a.id);
+                    if (currentIsSpecific && !existingIsSpecific) {
+                        exactMatches.set(key, a);
+                    } else if (currentIsSpecific === existingIsSpecific) {
+                        if ((a._updatedAt || 0) >= (existing._updatedAt || 0)) {
+                            exactMatches.set(key, a);
+                        }
+                    }
+                }
             }
 
-            const isBaseTemplate = !a.baseId || String(a.id) === String(a.baseId);
+            const isBaseTemplate = !isDerivedConcreteRecord && (!a.baseId || String(a.id) === String(a.baseId));
             if (normalizeFilterText(aWeekday) === normalizeFilterText(targetWeekday) && !a.isProjected && isBaseTemplate) {
                 const startDate = a.data || a.dataInicio;
                 const endDate = a.dataFim || a.data_fim;
@@ -648,7 +690,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (endDate && dateRef > endDate) return;
 
             const hasExactOverride = Array.from(exactMatches.values()).some(e => {
-                if (e.baseId && String(e.baseId) === String(template.id)) return true;
+                const eRawId = String(e.id || '');
+                const eBase = e.baseId || (eRawId.match(/_\d{4}-\d{2}-\d{2}$/) ? eRawId.replace(/_\d{4}-\d{2}-\d{2}$/, '') : eRawId);
+                if (eBase && String(eBase) === String(template.id)) return true;
                 if (normalizeFilterText(e.paciente) === normalizeFilterText(template.paciente) && normalizeFilterText(e.escola) === normalizeFilterText(template.escola)) return true;
                 return false;
             });
@@ -1149,8 +1193,11 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         date.setDate(date.getDate() + days);
-        if (date.getDay() === 0) date.setDate(date.getDate() + (days > 0 ? 1 : -2));
-        if (date.getDay() === 6 && days > 0) date.setDate(date.getDate() + 2);
+        if (date.getDay() === 6) {
+            date.setDate(date.getDate() + (days > 0 ? 2 : -1));
+        } else if (date.getDay() === 0) {
+            date.setDate(date.getDate() + (days > 0 ? 1 : -2));
+        }
         DOM.fData.value = date.toISOString().split('T')[0];
         updateDisplayDateLabel();
         render();
@@ -1398,7 +1445,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <button type="button" class="btn-audit-gps" data-action="audit-gps" data-id="${escapeHtml(item.id)}" data-date="${escapeHtml(effectiveItemDate)}">
                             <i class="ph ph-map-pin"></i> GPS (${auditCount})
                         </button>
-                        ${!isCancelled ? `<a href="${wppLink}" target="_blank" class="whatsapp-float-btn" title="WhatsApp"><i class="ph ph-whatsapp-logo"></i></a>` : ''}
+                        ${!isCancelled && phone ? `<a href="https://wa.me/${phone}" target="_blank" rel="noopener noreferrer" class="whatsapp-float-btn" title="Conversar no WhatsApp"><i class="ph ph-whatsapp-logo"></i></a>` : ''}
                     </div>
 
                     <div class="monitor-selector-inline">
@@ -1531,37 +1578,63 @@ document.addEventListener('DOMContentLoaded', () => {
                 const item = currentList.find(a => String(a.id) === String(button.dataset.id)) || appointments.find(a => String(a.id) === String(button.dataset.id));
                 if (!item) return;
 
+                const formattedTargetDate = formatDateBR(targetDate);
                 showConfirmationModal({
                     title: 'Excluir Agendamento',
-                    message: `Deseja excluir o agendamento de <strong>${escapeHtml(item.paciente)}</strong>?`,
+                    message: `
+                        <div style="text-align: left;">
+                            <p style="margin-bottom: 8px;">Escolha o escopo de exclusão para <strong>${escapeHtml(item.paciente)}</strong>:</p>
+                            <div style="display: flex; flex-direction: column; gap: 6px; padding: 10px; border-radius: 10px; background: var(--surface-subtle); border: 1px solid var(--border-main);">
+                                <label style="display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.8rem; cursor: pointer;">
+                                    <input type="radio" name="deleteScopeOpt" value="day" checked> Apenas este dia (${formattedTargetDate})
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.8rem; color: var(--tea-red); cursor: pointer;">
+                                    <input type="radio" name="deleteScopeOpt" value="series"> Toda a série recorrente (Todos os dias)
+                                </label>
+                            </div>
+                        </div>
+                    `,
                     iconClass: 'ph-trash',
                     onConfirm: async () => {
                         markUserInteraction();
+                        const scopeOpt = document.querySelector('input[name="deleteScopeOpt"]:checked')?.value || 'day';
                         const targetId = String(button.dataset.id);
                         const rawId = String(item.id || '');
                         const baseId = item.baseId || (rawId.startsWith('proj_') ? rawId.replace(/^proj_/, '').replace(/_\d{4}-\d{2}-\d{2}$/, '') : rawId);
-                        const patientNorm = normalizeFilterText(item.paciente);
 
-                        deletedIdsQueue.push(item);
-                        if (rawId) deletedIdsQueue.push(rawId);
-                        if (baseId) deletedIdsQueue.push(baseId);
+                        if (scopeOpt === 'day') {
+                            const concrete = ensureConcreteRecord(item, targetDate);
+                            concrete.status = 'CANCELADO';
+                            concrete.ausenciaMotivo = 'Excluído da agenda do dia';
+                            concrete.ausenciaTimestamp = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                            saveLocalState();
+                            render();
+                            showToast('Agendamento deste dia cancelado com sucesso!');
+                            await supabaseUpdateAppointment(concrete);
+                        } else {
+                            deletedIdsQueue.push(item);
+                            if (rawId) deletedIdsQueue.push(rawId);
+                            if (baseId) deletedIdsQueue.push(baseId);
 
-                        appointments = appointments.filter(a => {
-                            const aId = String(a.id);
-                            const aNorm = normalizeFilterText(a.paciente);
-                            const aBase = String(a.baseId || '');
+                            const patientNorm = normalizeFilterText(item.paciente);
 
-                            if (aId === targetId || aId === rawId || aId === baseId) return false;
-                            if (aBase && (aBase === baseId || aBase === rawId || aBase === targetId)) return false;
-                            if (patientNorm && aNorm === patientNorm && (!a.data || a.data === targetDate || a.data === item.data)) return false;
-                            return true;
-                        });
+                            appointments = appointments.filter(a => {
+                                const aId = String(a.id);
+                                const aNorm = normalizeFilterText(a.paciente);
+                                const aBase = String(a.baseId || '');
 
-                        saveLocalState();
-                        render();
-                        showToast('Agendamento excluído com sucesso!');
-                        await supabaseDeleteAppointmentCompletely(item);
-                        await flushPendingSyncQueue();
+                                if (aId === targetId || aId === rawId || aId === baseId) return false;
+                                if (aBase && (aBase === baseId || aBase === rawId || aBase === targetId)) return false;
+                                if (patientNorm && aNorm === patientNorm) return false;
+                                return true;
+                            });
+
+                            saveLocalState();
+                            render();
+                            showToast('Série de agendamentos excluída!');
+                            await supabaseDeleteAppointmentCompletely(item);
+                            await flushPendingSyncQueue();
+                        }
                     }
                 });
             }
@@ -1706,6 +1779,90 @@ document.addEventListener('DOMContentLoaded', () => {
                 </html>
             `);
             reportWin.document.close();
+        });
+    }
+
+    // ---- 13.1 Importador de Planilha (XLSX / CSV) ----
+    if (DOM.btnImportExcel && DOM.excelImportInput) {
+        DOM.btnImportExcel.addEventListener('click', () => {
+            if (!requireAdmin('importar planilhas')) return;
+            DOM.excelImportInput.click();
+        });
+
+        DOM.excelImportInput.addEventListener('change', (e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async (evt) => {
+                try {
+                    const data = new Uint8Array(evt.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonRows = XLSX.utils.sheet_to_json(firstSheet);
+
+                    if (!jsonRows || jsonRows.length === 0) {
+                        showToast('A planilha selecionada está vazia.', 'error');
+                        return;
+                    }
+
+                    const importedRecords = [];
+                    jsonRows.forEach(row => {
+                        const pVal = row.Profissional || row.profissional || row.PROFISSIONAL || '';
+                        const pacVal = row.Paciente || row.paciente || row.PACIENTE || '';
+                        const tVal = row.Atendimento || row.atendimento || row.Tipo || row.tipo || '';
+                        const escVal = row.Instituição || row.Instituicao || row.escola || row.ESCOLA || '';
+                        const telVal = row.Telefone || row.telefone || '';
+                        const transpVal = row.Transporte || row.transporte || 'Ambos';
+                        const obsVal = row.Obs || row.obs || row.Observações || '';
+                        const fInicio = row.Início || row.Inicio || row.inicio || '08:00';
+                        const fTermino = row.Término || row.Termino || row.termino || '09:00';
+                        const dataVal = row.Data || row.data || localISOTime;
+
+                        if (pacVal && pVal) {
+                            const horaInicio = parseInt(String(fInicio).split(':')[0], 10) || 8;
+                            const turnoCalculado = horaInicio >= 12 ? 'Tarde' : 'Manhã';
+                            const rec = {
+                                id: `${Date.now()}_imp_${Math.random().toString(36).substr(2, 5)}`,
+                                data: String(dataVal).substring(0, 10),
+                                dataFim: '',
+                                profissional: fixTextEncoding(pVal),
+                                tipo: fixTextEncoding(tVal),
+                                paciente: fixTextEncoding(pacVal),
+                                dia: getWeekdayFromISO(String(dataVal).substring(0, 10)),
+                                turno: turnoCalculado,
+                                inicio: String(fInicio).substring(0, 5),
+                                termino: String(fTermino).substring(0, 5),
+                                escola: fixTextEncoding(escVal),
+                                telefone: fixTextEncoding(telVal),
+                                transporte: fixTextEncoding(transpVal),
+                                obs: fixTextEncoding(obsVal),
+                                status: '',
+                                monitora: '',
+                                isProjected: false
+                            };
+                            importedRecords.push(rec);
+                            appointments.push(rec);
+                        }
+                    });
+
+                    if (importedRecords.length > 0) {
+                        saveLocalState();
+                        updateFilterOptions();
+                        render();
+                        showToast(`${importedRecords.length} agendamento(s) importado(s) com sucesso!`);
+                        await supabaseCreateAppointments(importedRecords);
+                    } else {
+                        showToast('Nenhum agendamento válido encontrado na planilha.', 'info');
+                    }
+                } catch (err) {
+                    console.error('Erro ao ler arquivo Excel:', err);
+                    showToast('Falha ao processar o arquivo Excel/CSV.', 'error');
+                } finally {
+                    DOM.excelImportInput.value = '';
+                }
+            };
+            reader.readAsArrayBuffer(file);
         });
     }
 

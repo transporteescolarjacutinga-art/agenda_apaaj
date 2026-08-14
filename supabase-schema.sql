@@ -33,6 +33,7 @@ create table if not exists public.appointments (
 );
 
 alter table public.appointments
+    add column if not exists base_id text default '',
     add column if not exists data_fim date,
     add column if not exists gps_buscado_escola text default '',
     add column if not exists timestamp_buscado_escola text default '',
