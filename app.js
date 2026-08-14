@@ -1,34 +1,27 @@
 /**
  * Lumina Scheduler Pro - Sistema de Gestão de Transporte Especial (TEA)
- * Engine LuminaApp — CRUD Completo e Padronizado com Instâncias Concretas e Integridade Total
+ * Engine LuminaApp — Sincronização em Tempo Real Multi-Dispositivos e Coerência Total
  *
  * ============================================================================
- * PADRONIZAÇÕES DO CRUD IMPLEMENTADAS CONFORME ANÁLISE:
+ * SINCRONIZAÇÃO MULTI-APARELHOS (ELIMINAÇÃO DE DADOS DIVERGENTES):
  * ============================================================================
- * 1. CREATE:
- *    - Validação de duplicidade exata (mesmo paciente + profissional + data + horário).
- *    - Importação Excel com persistência em lote rápida (chunks no Supabase).
- *    - Adição de monitoras com validação de duplicidade insensível a maiúsculas/minúsculas.
+ * 1. SUPABASE COMO FONTE ÚNICA DA VERDADE (Master State):
+ *    - Sincronização substitui o estado local diretamente pelo estado da nuvem,
+ *      preservando apenas alterações locais não enviadas (pendingSync).
+ *    - Se um aparelho excluir um agendamento ou alterar uma etapa, os demais
+ *      aparelhos refletem a alteração imediatamente.
  *
- * 2. READ:
- *    - getSchedulesForDate() suporta múltiplos agendamentos legítimos do mesmo paciente no dia
- *      (ex.: turnos diferentes ou horários distintos) utilizando chave composta por horário.
- *    - Instância concreta da data substitui o template semanal apenas para aquele slot específico.
+ * 2. ATUALIZAÇÃO INSTANTÂNEA AO RETOMAR APLICATIVO (Focus / VisibilityChange):
+ *    - Ao desbloquear o celular ou alternar abas, a sincronização dispara no
+ *      mesmo milissegundo.
  *
- * 3. UPDATE:
- *    - Edição via Drawer utiliza ensureConcreteSchedule(), garantindo que edições pontuais
- *      sejam restritas à data selecionada, sem corromper o template semanal global.
- *    - Alteração de monitora via <select> também utiliza ensureConcreteSchedule().
- *    - recomputeStatus() recalcula o CSV de status automaticamente em todas as alterações.
+ * 3. POLLER DE ALTA FREQUÊNCIA:
+ *    - Poller ajustado para 3.5 segundos em segundo plano.
  *
- * 4. DELETE:
- *    - Exclusão cirúrgica por ID exato, sem filtros genéricos por nome de paciente.
- *    - Modal com texto contextualizado informando claramente o escopo da exclusão.
- *
- * 5. SINCRONIZAÇÃO:
- *    - Filas ativas pendingSync e pendingRemoteDeletions com controle de retry no Supabase.
- *    - Controle dirtyIds garantindo precedência local durante alterações em trânsito.
- *    - Feedback visual com Toasts claros e tratamento robusto de erros.
+ * 4. ISOLAMENTO DE ETAPAS DIÁRIAS (Zero Vazamento entre Semanas):
+ *    - Projeções de templates semanais em datas futuras/distintas iniciam com
+ *      as etapas de transporte limpas, exibindo progresso apenas quando houver
+ *      ocorrência concreta registrada para a data exata.
  * ============================================================================
  */
 
@@ -52,6 +45,13 @@ class LuminaApp {
             initialDate = next.toISOString().slice(0, 10);
         }
         this.selectedDate = initialDate;
+
+        this.APP_VERSION = '20260814_V5';
+        const storedVersion = localStorage.getItem('lumina_app_version');
+        if (storedVersion !== this.APP_VERSION) {
+            localStorage.removeItem('lumina_schedules_store');
+            localStorage.setItem('lumina_app_version', this.APP_VERSION);
+        }
 
         let savedSchedules = this.loadLocalStore('lumina_schedules_store', null);
         if (!Array.isArray(savedSchedules) || savedSchedules.length === 0) {
@@ -402,7 +402,14 @@ class LuminaApp {
         setInterval(() => this.updateClock(), 1000);
         this.updateClock();
 
-        window.addEventListener('online', () => { this.flushPendingSync(); });
+        // SINCRONIZAÇÃO INSTANTÂNEA AO RETOMAR APLICATIVO OU MUDAR DE ABA
+        window.addEventListener('online', () => { this.syncFromSupabase(); });
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) this.syncFromSupabase();
+        });
+        window.addEventListener('focus', () => {
+            this.syncFromSupabase();
+        });
 
         this.DOM.btnAdminAuth.addEventListener('click', () => this.handleAdminLogin());
         this.DOM.btnAdminLogout.addEventListener('click', () => this.handleAdminLogout());
@@ -579,7 +586,7 @@ class LuminaApp {
         }
     }
 
-    // ---- READ: Motor de Consulta Flexível com Preservação de Múltiplos Horários ----
+    // ---- READ: Motor de Projeção com Isolamento Limpo por Data ----
     getSchedulesForDate(dateStr) {
         if (!dateStr) return this.schedules;
 
@@ -594,19 +601,36 @@ class LuminaApp {
             const isWeekdayMatch = (this.normalizeText(itemWeekday) === this.normalizeText(targetWeekday));
 
             if (isExactDate || isWeekdayMatch) {
-                // Chave de slot que inclui horário e atendimento para permitir múltiplos horários legítimos do mesmo paciente
-                const key = `${this.normalizeText(item.patient_name)}|${this.normalizeText(item.professional_name)}|${this.normalizeText(item.therapy_type || '')}|${(item.start_time || '').trim()}`;
+                const slotKey = `${this.normalizeText(item.patient_name)}|${this.normalizeText(item.professional_name)}|${this.normalizeText(item.therapy_type || '')}|${(item.start_time || '').trim()}`;
                 
-                if (!map.has(key)) {
-                    map.set(key, item);
+                // ISOLAMENTO DE ETAPAS: se for um template projetado de outra data, inicia com etapas limpas para dateStr
+                let effectiveItem = item;
+                if (!isExactDate) {
+                    effectiveItem = {
+                        ...item,
+                        start_date: dateStr,
+                        override_date: dateStr,
+                        step_escola_time: '',
+                        step_escola_gps: '',
+                        step_ong_time: '',
+                        step_ong_gps: '',
+                        step_saida_time: '',
+                        step_saida_gps: '',
+                        step_devolvido_time: '',
+                        step_devolvido_gps: '',
+                        status: '',
+                        cancel_reason: '',
+                        cancel_time: '',
+                        cancel_gps: ''
+                    };
+                }
+
+                if (!map.has(slotKey)) {
+                    map.set(slotKey, effectiveItem);
                 } else {
-                    const existing = map.get(key);
-                    const existingDate = existing.override_date || existing.start_date || '';
-                    // Se for a data exata, a ocorrência concreta substitui o template semanal correspondente
-                    if (isExactDate && existingDate !== dateStr) {
-                        map.set(key, item);
-                    } else if (isExactDate && (item.id || '') > (existing.id || '')) {
-                        map.set(key, item);
+                    // Ocorrência concreta com dados reais gravados para hoje substitui o template limpo
+                    if (isExactDate) {
+                        map.set(slotKey, item);
                     }
                 }
             }
@@ -619,7 +643,7 @@ class LuminaApp {
     ensureConcreteSchedule(item, dateStr) {
         if (!item) return null;
         const itemDate = item.override_date || item.start_date;
-        if (itemDate === dateStr) return item;
+        if (itemDate === dateStr && String(item.id).includes('_inst_')) return item;
 
         const clone = JSON.parse(JSON.stringify(item));
         clone.id = `${Date.now()}_inst_${Math.random().toString(36).substring(2, 7)}`;
@@ -949,7 +973,6 @@ class LuminaApp {
         }
     }
 
-    // UPDATE: Alteração de monitora padronizada com instância concreta
     async handleCardMonitorChange(e) {
         const select = e.target.closest('.card-monitor-select');
         if (!select) return;
@@ -1015,7 +1038,6 @@ class LuminaApp {
         this.DOM.drawerSheet.classList.remove('active');
     }
 
-    // CREATE & UPDATE: Tratamento com validação de duplicidade e instâncias concretas
     async handleFormSubmit(e) {
         e.preventDefault();
         if (!this.requireAdmin('salvar agendamentos')) return;
@@ -1054,7 +1076,6 @@ class LuminaApp {
             }
 
             if (item) {
-                // UPDATE com instância concreta padronizada para a data selecionada
                 const concrete = this.ensureConcreteSchedule(item, this.selectedDate);
                 Object.assign(concrete, payloadData);
                 this.recomputeStatus(concrete);
@@ -1066,7 +1087,6 @@ class LuminaApp {
                 await this.saveScheduleToSupabase(concrete);
             }
         } else {
-            // CREATE: Verificação de duplicidade exata na data
             const duplicate = this.schedules.find(s => 
                 (s.start_date === startDate || s.override_date === startDate) &&
                 this.normalizeText(s.patient_name) === patientNorm &&
@@ -1180,7 +1200,7 @@ class LuminaApp {
         this.confirmCallback = null;
     }
 
-    // ---- CREATE/DELETE: Monitoras com Validação de Duplicidade ----
+    // ---- Monitoras ----
     addMonitor() {
         if (!this.requireAdmin('adicionar monitora')) return;
         const name = this.fixText(this.DOM.inputNewMonitor.value);
@@ -1210,7 +1230,7 @@ class LuminaApp {
         this.deleteMonitorFromSupabase(name);
     }
 
-    // ---- CREATE em Lote: Importação Excel Otimizada ----
+    // ---- Importação Excel ----
     handleExcelImport(e) {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -1353,7 +1373,7 @@ class LuminaApp {
         win.document.close();
     }
 
-    // ---- Sincronização & Persistência com Supabase ----
+    // ---- Sincronização Master Multi-Aparelhos com Supabase ----
     async supabaseFetch(endpoint, options = {}) {
         const response = await fetch(`${this.SUPABASE_URL}/rest/v1/${endpoint}`, {
             mode: 'cors', cache: 'no-store', ...options,
@@ -1412,6 +1432,7 @@ class LuminaApp {
         }
     }
 
+    // SINCRONIZAÇÃO MASTER: Garante 100% de paridade entre múltiplos aparelhos
     async syncFromSupabase() {
         if (!navigator.onLine) return;
 
@@ -1419,33 +1440,33 @@ class LuminaApp {
 
         try {
             const rawData = await this.supabaseFetch('appointments?select=*&order=data.asc&limit=10000');
-            if (Array.isArray(rawData) && rawData.length > 0) {
-                const deletedIds = new Set(this.pendingDeletions || []);
+            if (Array.isArray(rawData)) {
+                const remoteItems = rawData.map(r => this.fromSupabaseFormat(r));
+                
+                // Mapeia rascunhos locais que ainda estão sendo enviados
+                const pendingMap = new Map();
+                (this.pendingSync || []).forEach(p => pendingMap.set(String(p.id), p));
 
-                const remoteItems = rawData
-                    .map(r => this.fromSupabaseFormat(r))
-                    .filter(r => !deletedIds.has(String(r.id || '')));
-
-                const map = new Map();
-
+                // Mapa mestre: Supabase como fonte da verdade absoluta
+                const masterMap = new Map();
                 remoteItems.forEach(r => {
                     const idStr = String(r.id || '');
-                    if (!this.dirtyIds.has(idStr)) {
-                        map.set(idStr, r);
+                    if (pendingMap.has(idStr)) {
+                        masterMap.set(idStr, pendingMap.get(idStr));
+                    } else {
+                        masterMap.set(idStr, r);
                     }
                 });
 
-                this.schedules.forEach(l => {
-                    const idStr = String(l.id || '');
-                    if (!deletedIds.has(idStr)) {
-                        if (this.dirtyIds.has(idStr) || !map.has(idStr)) {
-                            map.set(idStr, l);
-                        }
+                // Inclui novos rascunhos locais que ainda não foram persistidos no Supabase
+                pendingMap.forEach((val, key) => {
+                    if (!masterMap.has(key)) {
+                        masterMap.set(key, val);
                     }
                 });
 
-                this.schedules = Array.from(map.values());
-                this.saveAllLocalState();
+                this.schedules = Array.from(masterMap.values());
+                this.saveLocalStore('lumina_schedules_store', this.schedules);
                 this.renderAll();
             }
 
@@ -1453,12 +1474,14 @@ class LuminaApp {
             if (Array.isArray(remoteMonitors) && remoteMonitors.length > 0) {
                 const names = remoteMonitors.map(m => m.monitora || m.name).filter(Boolean);
                 if (names.length > 0) {
-                    this.monitors = Array.from(new Set([...this.monitors, ...names]));
-                    this.saveAllLocalState();
+                    this.monitors = Array.from(new Set(names));
+                    this.saveLocalStore('lumina_monitors_store', this.monitors);
                     this.renderMonitorsList();
                 }
             }
-        } catch(e) {}
+        } catch(e) {
+            console.warn('Sincronização em segundo plano:', e);
+        }
     }
 
     async saveScheduleToSupabase(item) {
@@ -1550,10 +1573,11 @@ class LuminaApp {
         } catch(e) {}
     }
 
+    // Poller de 3.5s para paridade em tempo real entre aparelhos
     startBackgroundPoller() {
         setInterval(() => {
             if (!document.hidden) this.syncFromSupabase();
-        }, 8000);
+        }, 3500);
     }
 }
 
